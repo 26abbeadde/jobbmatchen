@@ -1,0 +1,1390 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jobbmatchen</title>
+<meta name="description" content="Hitta jobbannonser från Platsbanken de senaste 7 dagarna och se hur väl de matchar dina kunskaper och ditt CV.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💼</text></svg>">
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --text: #1d2330;
+    --muted: #5f6878;
+    --border: #dde1e8;
+    --accent: #1f5fd1;
+    --accent-weak: #e7eefb;
+    --good: #1b8a4b;
+    --good-weak: #e3f4ea;
+    --mid: #c98a0c;
+    --low: #9aa3b2;
+    --warn: #c0392b;
+    --warn-weak: #fbe9e7;
+    --chip: #eef1f5;
+    --mark: #fff1a8;
+    --shadow: 0 1px 2px rgba(20, 30, 50, .06), 0 2px 8px rgba(20, 30, 50, .05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b;
+      --panel: #1b1f27;
+      --text: #e6e9ef;
+      --muted: #9aa3b2;
+      --border: #2d333f;
+      --accent: #6c9cff;
+      --accent-weak: #22304d;
+      --good: #4cc282;
+      --good-weak: #1d3527;
+      --mid: #e3b041;
+      --low: #5f6878;
+      --warn: #ff7b6b;
+      --warn-weak: #3a2220;
+      --chip: #262c37;
+      --mark: #5c4d10;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header { padding: 20px 16px 8px; max-width: 1240px; margin: 0 auto; }
+  header h1 { margin: 0; font-size: 1.6rem; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  main {
+    display: grid;
+    grid-template-columns: 370px minmax(0, 1fr);
+    gap: 20px;
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 12px 16px 40px;
+    align-items: start;
+  }
+  @media (max-width: 880px) { main { grid-template-columns: minmax(0, 1fr); } }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    box-shadow: var(--shadow);
+  }
+  aside.panel { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
+  @media (max-width: 880px) { aside.panel { position: static; max-height: none; } }
+
+  label.field { display: block; font-weight: 600; margin: 16px 0 6px; }
+  label.field:first-child { margin-top: 0; }
+  .hint { color: var(--muted); font-size: .85rem; font-weight: 400; margin: -2px 0 6px; }
+  select, input[type=text], input[type=password] {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--text);
+    font: inherit;
+  }
+  select:disabled { opacity: .6; }
+  select:focus, input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .inline { display: flex; gap: 8px; }
+  .inline select { flex: 1; min-width: 0; }
+  .secondary {
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    padding: 8px 12px; border-radius: 8px; cursor: pointer; font: inherit; white-space: nowrap;
+  }
+  .secondary:hover { border-color: var(--accent); }
+
+  .chipbox {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    min-height: 42px;
+    cursor: text;
+  }
+  .chipbox input { flex: 1; min-width: 120px; border: 0; padding: 4px; outline: none; background: transparent; color: var(--text); font: inherit; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chips:empty { display: none; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--chip);
+    border-radius: 999px;
+    padding: 2px 4px 2px 10px;
+    font-size: .85rem;
+  }
+  .chip button { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 4px; }
+  .chip.kw, .chip.role { background: var(--accent-weak); }
+  .chip.ex { background: var(--warn-weak); }
+
+  .drop {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+    color: var(--muted);
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .drop.over, .drop:hover { border-color: var(--accent); background: var(--accent-weak); }
+  .drop strong { color: var(--text); }
+  .cvinfo { margin-top: 8px; font-size: .9rem; }
+  .cvinfo .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .linkbtn { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; font: inherit; font-size: .88rem; }
+  .linkbtn:hover { text-decoration: underline; }
+
+  .primary {
+    margin-top: 18px;
+    width: 100%;
+    padding: 11px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .primary:disabled { opacity: .6; cursor: progress; }
+  .toggle { display: flex; gap: 8px; align-items: flex-start; margin-top: 14px; font-size: .9rem; }
+  .toggle input { margin-top: 3px; }
+  details.settings { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
+  details.settings summary { cursor: pointer; font-weight: 600; }
+  details.settings p { font-size: .85rem; color: var(--muted); }
+  .privacy { font-size: .8rem; color: var(--muted); margin-top: 12px; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .tabs button {
+    border: 0; background: none; color: var(--muted); font: inherit; font-weight: 600;
+    padding: 8px 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+
+  .banner {
+    background: var(--good-weak); border: 1px solid var(--good); color: var(--text);
+    border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: .92rem;
+  }
+  .filters {
+    display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; margin-bottom: 12px; font-size: .9rem;
+  }
+  .filters select { width: auto; padding: 5px 8px; font-size: .9rem; }
+  .filters label { display: flex; align-items: center; gap: 6px; }
+  .count { font-weight: 600; margin: 0 0 10px; }
+  .count .sub { font-weight: 400; color: var(--muted); }
+
+  .status { color: var(--muted); padding: 30px 10px; text-align: center; }
+  .status.error { color: var(--warn); }
+
+  .job {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+  }
+  .job.dim { opacity: .55; }
+  .job-top { display: flex; gap: 14px; justify-content: space-between; align-items: flex-start; }
+  .job-top > div:first-child { min-width: 0; }
+  .job h2 { margin: 0 0 2px; font-size: 1.08rem; overflow-wrap: anywhere; }
+  .job h2 a { color: var(--text); text-decoration: none; }
+  .job h2 a:hover { color: var(--accent); text-decoration: underline; }
+  .employer { color: var(--muted); }
+  .meta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: .88rem; color: var(--muted); }
+  .meta .fresh { color: var(--good); font-weight: 600; }
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .badge { font-size: .75rem; font-weight: 600; padding: 1px 8px; border-radius: 4px; background: var(--chip); color: var(--muted); }
+  .badge.new { background: var(--good); color: #fff; }
+  .badge.urgent { background: var(--warn-weak); color: var(--warn); }
+  .badge.salary { background: var(--good-weak); color: var(--good); }
+  .badge.applied { background: var(--accent-weak); color: var(--accent); }
+
+  .score { text-align: center; min-width: 74px; }
+  .score .pct { font-size: 1.25rem; font-weight: 700; }
+  .score .lbl { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+  .bar { height: 5px; background: var(--chip); border-radius: 3px; overflow: hidden; margin-top: 3px; }
+  .bar span { display: block; height: 100%; }
+
+  .matched { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; }
+  .tag { font-size: .8rem; padding: 1px 9px; border-radius: 999px; background: var(--accent-weak); }
+  .tag.cv { background: var(--chip); }
+  .tag small { color: var(--muted); }
+  .tag.req { box-shadow: inset 0 0 0 1px var(--good); }
+  .tag.miss { background: transparent; border: 1px dashed var(--border); color: var(--muted); text-decoration: line-through; }
+  .tag.lack { background: var(--warn-weak); color: var(--warn); }
+
+  .desc { margin-top: 10px; white-space: pre-line; font-size: .92rem; overflow-wrap: anywhere; }
+  .desc mark { background: var(--mark); color: inherit; border-radius: 2px; padding: 0 1px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: .9rem; align-items: center; }
+  .actions a { color: var(--accent); }
+  .ai { margin-top: 10px; padding: 12px 14px; border-radius: 10px; background: var(--accent-weak); font-size: .92rem; }
+  .ai:empty { display: none; }
+  .ai h3 { margin: 0 0 6px; font-size: .95rem; }
+  .ai ul { margin: 4px 0 8px; padding-left: 20px; }
+  .ai .err { color: var(--warn); }
+  .more { margin-top: 8px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>💼 Jobbmatchen</h1>
+  <p>Jobbannonser från Platsbanken som publicerats de senaste 7 dagarna, och hur väl de matchar dig.</p>
+</header>
+
+<main>
+  <aside class="panel">
+    <label class="field" for="field">Bransch / yrkesområde</label>
+    <select id="field"><option value="">Laddar…</option></select>
+
+    <label class="field" for="group">Roll / yrkesgrupp</label>
+    <div class="inline">
+      <select id="group" disabled><option value="">Alla roller inom området</option></select>
+      <button class="secondary" id="addRole" type="button" title="Lägg till rollen i sökningen">+ Lägg till</button>
+    </div>
+    <p class="hint" style="margin-top:6px">Lägg till flera roller för att söka på dem samtidigt.</p>
+    <div class="chips" id="roleChips"></div>
+
+    <label class="field" for="region">Län</label>
+    <select id="region"><option value="">Hela Sverige</option></select>
+    <select id="municipality" disabled style="margin-top:8px"><option value="">Hela länet</option></select>
+
+    <label class="field" for="kwInput">Nyckelord</label>
+    <p class="hint">T.ex. "projektledare", "junior". Tryck Enter efter varje ord.</p>
+    <div class="chipbox" id="kwBox"><input id="kwInput" type="text" placeholder="Lägg till nyckelord…"></div>
+
+    <label class="field" for="toolInput">Verktyg &amp; system du kan</label>
+    <p class="hint">T.ex. Excel, SAP, Python, Fortnox, truckkort B.</p>
+    <div class="chipbox" id="toolBox"><input id="toolInput" type="text" placeholder="Lägg till verktyg/system…"></div>
+
+    <label class="field" for="exInput">Uteslut annonser med</label>
+    <p class="hint">T.ex. "senior", "bemanning", "provision".</p>
+    <div class="chipbox" id="exBox"><input id="exInput" type="text" placeholder="Lägg till ord att utesluta…"></div>
+
+    <label class="field">Ditt CV (valfritt)</label>
+    <div class="drop" id="drop" tabindex="0" role="button">
+      <strong>Släpp ditt CV här</strong> eller klicka för att välja<br>
+      <span class="hint">PDF, Word (.docx/.doc), text eller bild</span>
+    </div>
+    <input type="file" id="cvFile" accept=".pdf,.docx,.doc,.txt,.md,.rtf,.png,.jpg,.jpeg,.webp" hidden>
+    <div class="cvinfo" id="cvInfo" hidden></div>
+
+    <button class="primary" id="searchBtn">Sök jobb</button>
+
+    <label class="toggle"><input type="checkbox" id="watch">
+      <span>🔔 <strong>Bevaka sökningen</strong><br><span class="hint">Söker automatiskt när du öppnar appen, och var 30:e minut medan den är öppen. Du får en notis om nya annonser.</span></span>
+    </label>
+
+    <details class="settings" id="aiSettings">
+      <summary>🤖 AI-analys (valfritt)</summary>
+      <p>Med en egen API-nyckel från <a href="https://console.anthropic.com/" target="_blank" rel="noopener">Anthropic</a> kan du få en AI-bedömning av hur väl du passar en viss annons, med styrkor, luckor och tips. Det kostar ungefär 0,5 kr per analys på ditt Anthropic-konto.</p>
+      <p>Nyckeln sparas bara i den här webbläsaren. När du klickar <em>AI-analys</em> skickas annonsen, dina nyckelord och ditt CV till Anthropic.</p>
+      <input type="password" id="apiKey" placeholder="sk-ant-…" autocomplete="off">
+      <div class="inline" style="margin-top:8px">
+        <button class="secondary" id="saveKey" type="button">Spara nyckel</button>
+        <button class="secondary" id="clearKey" type="button">Ta bort</button>
+      </div>
+      <p id="keyStatus"></p>
+    </details>
+
+    <p class="privacy">Ditt CV läses här i webbläsaren och skickas ingenstans, utom till Anthropic om du själv väljer AI-analys. Annonserna hämtas från Arbetsförmedlingens öppna API (JobTech).</p>
+  </aside>
+
+  <section>
+    <div class="tabs" role="tablist">
+      <button data-view="results" class="active" role="tab">Sökresultat</button>
+      <button data-view="saved" role="tab">Sparade (<span id="savedCount">0</span>)</button>
+    </div>
+    <div id="banner" class="banner" hidden></div>
+    <div class="filters" id="filters" hidden>
+      <label>Sortera
+        <select id="sort">
+          <option value="date">Nyast först</option>
+          <option value="match">Bäst matchning</option>
+        </select>
+      </label>
+      <label>Arbetsplats
+        <select id="fWorkplace">
+          <option value="">Alla</option>
+          <option value="remote">Distans</option>
+          <option value="hybrid">Distans eller hybrid</option>
+          <option value="onsite">På plats</option>
+        </select>
+      </label>
+      <label>Omfattning
+        <select id="fHours">
+          <option value="">Alla</option>
+          <option value="full">Heltid</option>
+          <option value="part">Deltid</option>
+        </select>
+      </label>
+      <label>Anställning
+        <select id="fEmployment">
+          <option value="">Alla</option>
+          <option value="perm">Tillsvidare</option>
+          <option value="temp">Visstid / övrigt</option>
+        </select>
+      </label>
+      <label id="onlyMatchWrap"><input type="checkbox" id="onlyMatch"> Bara med matchning</label>
+      <label><input type="checkbox" id="onlyNew"> Bara nya sedan förra besöket</label>
+      <label><input type="checkbox" id="showHidden"> Visa dolda</label>
+    </div>
+    <div id="results">
+      <div class="status">Välj bransch och roll, lägg till nyckelord och verktyg och tryck <strong>Sök jobb</strong>.</div>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const SEARCH_API = 'https://jobsearch.api.jobtechdev.se/search';
+  const TAXONOMY_API = 'https://taxonomy.api.jobtechdev.se/v1/taxonomy/graphql';
+  const SDK_URL = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.133.0/+esm';
+  const PDFJS_BASE = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  const MAMMOTH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+  const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+  const AI_MODEL = 'claude-opus-5-5';
+
+  const DAYS = 7;
+  const BASE_PAGES = 3;              // 3 x 100 senaste annonserna för valda roller
+  const MAX_TERM_QUERIES = 10;       // extra fritextsökningar per nyckelord/verktyg
+  const PAGE_SIZE = 25;              // annonser som visas åt gången
+  const WATCH_INTERVAL = 30 * 60 * 1000;
+  const DEADLINE_SOON_DAYS = 3;
+
+  // Viktning: det du själv skrivit väger tyngst. En träff i rubriken eller i
+  // annonsens kravdel väger extra.
+  const WEIGHT = { kw: 3, tool: 3, cv: 1 };
+  const HEADLINE_BOOST = 1.5;
+  const REQUIREMENT_BOOST = 1.3;
+
+  // Vanliga verktyg, system och kompetenser som letas upp i CV:t. Ord som börjar
+  // med versal (produktnamn) matchas skiftlägeskänsligt, övriga oavsett skiftläge.
+  const SKILL_DICTIONARY = [
+    // Kontor & affärssystem
+    'Excel', 'Word', 'PowerPoint', 'Outlook', 'Office 365', 'Microsoft 365', 'Teams', 'SharePoint', 'OneDrive',
+    'Google Workspace', 'Power BI', 'Tableau', 'Qlik', 'Qlik Sense', 'SAP', 'SAP S/4HANA', 'Oracle', 'Visma',
+    'Fortnox', 'Hogia', 'Monitor ERP', 'Microsoft Dynamics', 'Dynamics 365', 'Business Central', 'Navision',
+    'Salesforce', 'HubSpot', 'Lime CRM', 'Pipedrive', 'Jira', 'Confluence', 'Trello', 'Asana', 'Notion',
+    'Workday', 'Agda', 'Heroma', 'Personec', 'Raindance', 'Unit4', 'Agresso', 'IFS', 'Jeeves', 'Pyramid',
+    'Mailchimp', 'Google Analytics', 'Google Ads', 'Meta Ads', 'SEO', 'SEM', 'WordPress', 'Shopify', 'Magento',
+    'Adobe Photoshop', 'Photoshop', 'Illustrator', 'InDesign', 'Premiere Pro', 'After Effects', 'Lightroom',
+    'Figma', 'Sketch', 'Canva', 'Final Cut',
+    // IT & utveckling
+    'Python', 'Java', 'JavaScript', 'TypeScript', 'C#', 'C++', 'Golang', 'Rust', 'Kotlin', 'Swift',
+    'PHP', 'Ruby', 'Scala', 'MATLAB', 'SQL', 'T-SQL', 'PL/SQL', 'PostgreSQL', 'MySQL', 'SQL Server',
+    'MongoDB', 'Redis', 'Elasticsearch', 'Kafka', 'Spark', 'Databricks', 'Snowflake', 'dbt', 'Airflow',
+    'React', 'Angular', 'Vue', 'Next.js', 'Node.js', '.NET', 'ASP.NET', 'Spring', 'Spring Boot', 'Django',
+    'Flask', 'FastAPI', 'HTML', 'CSS', 'Tailwind', 'GraphQL', 'REST', 'API', 'Git', 'GitHub', 'GitLab',
+    'Azure', 'AWS', 'GCP', 'Google Cloud', 'Docker', 'Kubernetes', 'Terraform', 'Ansible', 'Jenkins',
+    'CI/CD', 'DevOps', 'Linux', 'Windows Server', 'Active Directory', 'Entra ID', 'Intune', 'SCCM',
+    'VMware', 'Hyper-V', 'Citrix', 'PowerShell', 'Bash', 'ServiceNow', 'TOPdesk', 'ITIL', 'Cisco',
+    'Fortinet', 'Palo Alto', 'Wireshark', 'Splunk', 'SIEM', 'ISO 27001', 'Machine Learning', 'AI',
+    'TensorFlow', 'PyTorch', 'Scrum', 'Kanban', 'Agile', 'SAFe', 'Selenium', 'Cypress', 'Playwright',
+    'iOS', 'Android', 'Flutter', 'React Native', 'Unity', 'Unreal Engine', 'PLC', 'Siemens',
+    'AutoCAD', 'Revit', 'SolidWorks', 'Catia', 'Inventor', 'ArchiCAD', 'Tekla', 'BIM', 'GIS', 'ArcGIS',
+    'Creo', 'Ansys', 'LabVIEW',
+    // Ekonomi, HR, inköp, logistik
+    'bokföring', 'redovisning', 'bokslut', 'årsredovisning', 'löneadministration', 'lönehantering',
+    'kundreskontra', 'leverantörsreskontra', 'moms', 'budget', 'controlling', 'IFRS', 'K3', 'revision',
+    'rekrytering', 'arbetsrätt', 'kompetensbaserad rekrytering', 'upphandling', 'LOU', 'inköp',
+    'Lean', 'Six Sigma', 'Kaizen', '5S', 'WMS', 'lagerhantering', 'truckkort', 'truckkort A', 'truckkort B',
+    'motviktstruck', 'skjutstativtruck', 'ledstaplare', 'plocktruck', 'traverskort', 'ADR', 'YKB',
+    'B-körkort', 'C-körkort', 'CE-körkort', 'D-körkort', 'körkort B', 'körkort C', 'körkort CE', 'hjullastare',
+    'grävmaskin', 'liftkort', 'heta arbeten', 'säker vatten', 'ID06', 'elbehörighet', 'ESA',
+    'svetsning', 'MIG', 'TIG', 'CNC', 'svarvning', 'fräsning', 'ritningsläsning', 'kvalitetskontroll',
+    'ISO 9001', 'ISO 14001', 'projektledning', 'Prince2', 'PMP', 'kundservice', 'försäljning', 'B2B', 'B2C',
+    'kassa', 'visual merchandising',
+    // Vård, omsorg, skola
+    'Cosmic', 'TakeCare', 'Melior', 'Procapita', 'Lifecare', 'Treserva', 'Pascal', 'NPÖ', 'journalföring',
+    'delegering', 'läkemedelshantering', 'sjuksköterskelegitimation', 'förskollärarlegitimation',
+    'lärarlegitimation', 'undersköterska', 'HLR', 'demensvård', 'palliativ vård', 'psykiatri', 'LSS', 'SoL',
+    'KBT', 'lågaffektivt bemötande', 'NPF', 'Unikum', 'Skolon', 'Google Classroom', 'Vklass',
+    // Hotell & restaurang
+    'hygienpass', 'HACCP', 'serveringstillstånd', 'barista', 'à la carte', 'Opera PMS', 'Mews',
+    // Språk
+    'engelska', 'tyska', 'franska', 'spanska', 'arabiska', 'finska', 'norska', 'danska',
+  ];
+
+  // Ord som betyder samma sak. Kompletteras med synonymer från
+  // Arbetsförmedlingens kompetensregister när det har laddats.
+  const SYNONYM_GROUPS = [
+    ['excel', 'ms excel', 'microsoft excel', 'kalkylprogram', 'kalkylark'],
+    ['microsoft 365', 'office 365', 'm365', 'ms office', 'office-paketet', 'officepaketet'],
+    ['javascript', 'js'], ['c#', 'csharp', 'c sharp'], ['.net', 'dotnet'], ['node.js', 'nodejs'],
+    ['power bi', 'powerbi'], ['postgresql', 'postgres'], ['sql server', 'mssql', 'ms sql'],
+    ['kubernetes', 'k8s'], ['aws', 'amazon web services'], ['gcp', 'google cloud'], ['azure', 'microsoft azure'],
+    ['ai', 'artificiell intelligens', 'artificial intelligence'], ['machine learning', 'maskininlärning'],
+    ['frontend', 'front-end', 'front end'], ['backend', 'back-end', 'back end'], ['fullstack', 'full-stack', 'full stack'],
+    ['ux', 'användarupplevelse', 'user experience'],
+    ['it-support', 'helpdesk', 'servicedesk', 'service desk', 'it support'],
+    ['kundservice', 'kundtjänst', 'customer service', 'kundsupport'],
+    ['projektledning', 'projektledare', 'project management', 'project manager'],
+    ['b-körkort', 'körkort b', 'b-kort', 'körkort'], ['c-körkort', 'körkort c'], ['ce-körkort', 'körkort ce'],
+    ['truckkort', 'truckkörkort', 'truckbehörighet', 'truckutbildning'],
+    ['undersköterska', 'usk'], ['sjuksköterska', 'ssk'],
+    ['svetsning', 'svetsare'], ['lager', 'lagerarbete', 'lagerarbetare', 'lagerhantering'],
+    ['engelska', 'english'], ['svenska', 'swedish'],
+    ['distans', 'remote', 'distansarbete', 'hemifrån'],
+    ['junior', 'nyexaminerad', 'entry level', 'entry-level'],
+    ['säljare', 'försäljning', 'sales'], ['inköp', 'inköpare', 'procurement'],
+    ['rekrytering', 'rekryterare', 'recruitment'], ['löneadministration', 'lönehantering', 'payroll'],
+    ['hr', 'human resources'],
+  ];
+
+  const STOPWORDS = new Set((
+    'och i att det som en på är av för med till den har de inte om ett han men var jag sig från vi så kan man när år ' +
+    'säger hon under också efter eller nu sin där vid mot ska skulle kommer ut får finns vara hade alla andra mycket än här ' +
+    'då sedan över bara in blir upp även vad få två vill ha många hur mer går sverige kronor detta nya procent ' +
+    'skriver hans utan vår våra vårt ditt din dina du ni er era oss mig min mina mitt dig dem deras hennes ' +
+    'the and for with you your our are this that from have will can all who about more work team role ' +
+    'erfarenhet arbete arbetet jobb jobba tjänst tjänsten företag företaget kund kunder ansvar ansvarig ' +
+    'januari februari mars april maj juni juli augusti september oktober november december ' +
+    'måndag tisdag onsdag torsdag fredag lördag söndag stockholm göteborg malmö uppsala sweden svensk ' +
+    'cv profil kontakt adress telefon mail email e-post referenser referens utbildning anställning ' +
+    'nuvarande tidigare kompetens kompetenser kunskap kunskaper personligt personliga egenskaper ' +
+    'ansvarade arbetade jobbade genomförde ledde nivå mycket god goda grundläggande avancerad ' +
+    'gymnasium gymnasieskola högskola universitet examen program kurs kurser intressen hobbies ' +
+    'lead senior junior manager specialist assistant ab hb kb inc ltd gmbh språk språkkunskaper ' +
+    'färdigheter certifikat certifieringar övrigt sammanfattning om arbetslivserfarenhet'
+  ).split(/\s+/));
+
+  // ---------- Tillstånd ----------
+  let ready = false;
+  let searchedOnce = false;
+  let searching = false;
+  let view = 'results';
+  let ads = [];
+  let totalAvailable = 0;
+  let shown = PAGE_SIZE;
+  let currentTerms = [];
+  let watchTimer = null;
+  let fields = [];
+  let taxonomySynonyms = [];
+
+  // ---------- Hjälpfunktioner ----------
+  const $ = (id) => document.getElementById(id);
+  const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  const norm = (s) => s.trim().replace(/\s+/g, ' ');
+  const lc = (s) => (s || '').toLowerCase();
+
+  const store = {
+    get(key, fallback) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; } },
+    // Fält som börjar med "_" är cachade beräkningar och sparas inte.
+    set(key, value) { try { localStorage.setItem(key, JSON.stringify(value, (k, v) => (k.startsWith('_') ? undefined : v))); } catch { /* ignoreras */ } },
+  };
+
+  // Termen måste börja vid en ordgräns. Längre termer får följas av en ändelse
+  // (t.ex. "Excel" i "Excelkunskaper"), korta termer måste stå för sig själva
+  // så att "Java" inte matchar "JavaScript".
+  const regexCache = new Map();
+  function termRegex(term, flags = 'iu') {
+    const key = term + '|' + flags;
+    if (!regexCache.has(key)) {
+      const allowSuffix = term.length >= 5 && /[\p{L}\p{N}]$/u.test(term);
+      const tail = allowSuffix ? '' : '(?![\\p{L}\\p{N}+#])';
+      regexCache.set(key, new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(term).replace(/ /g, '[\\s-]+')}${tail}`, flags));
+    }
+    return regexCache.get(key);
+  }
+  // Snabb förkontroll med includes innan det dyrare reguljära uttrycket körs.
+  function hasTerm(text, term, lower) {
+    if (!text || !term) return false;
+    if (!(lower ?? lc(text)).includes(lc(term).split(' ')[0])) return false;
+    return termRegex(term).test(text);
+  }
+  const firstHit = (text, lower, variants) => variants.find((v) => hasTerm(text, v, lower)) || null;
+
+  // "SQL, frågespråk" -> ["SQL"], "Artificial Intelligence/Artificiell intelligens/AI" -> tre delar.
+  const cleanLabel = (label) => String(label || '').split('/')
+    .map((p) => p.replace(/,\s*[a-zåäö][^,]*$/u, '').trim()).filter((p) => p.length > 1);
+
+  function relativeDate(iso) {
+    const d = new Date(iso);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const day = new Date(d); day.setHours(0, 0, 0, 0);
+    const diff = Math.round((today - day) / 86400000);
+    const time = d.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+    if (diff <= 0) return { text: `Idag ${time}`, fresh: true };
+    if (diff === 1) return { text: `Igår ${time}`, fresh: true };
+    return { text: `${diff} dagar sedan`, fresh: false };
+  }
+
+  // ---------- Sparat på den här datorn ----------
+  const saved = store.get('jm.saved', {});          // id -> annons
+  const applied = store.get('jm.applied', {});      // id -> datum
+  const hidden = new Set(store.get('jm.hidden', []));
+  const seen = store.get('jm.seen', {});            // id -> tidpunkt då annonsen först visades
+  for (const [id, t] of Object.entries(seen)) if (Date.now() - t > 30 * 86400000) delete seen[id];
+  const seenAtStart = new Set(Object.keys(seen));   // "ny" = inte visad före det här besöket
+  const isNew = (ad) => seenAtStart.size > 0 && !seenAtStart.has(ad.id);
+
+  // ---------- Chip-fält ----------
+  function chipInput(boxId, inputId, cls, storeKey, onChange) {
+    const box = $(boxId), input = $(inputId);
+    let items = store.get(storeKey, []);
+    function render() {
+      box.querySelectorAll('.chip').forEach((c) => c.remove());
+      items.forEach((item, i) => {
+        const chip = document.createElement('span');
+        chip.className = 'chip ' + cls;
+        chip.innerHTML = `${escapeHtml(item)}<button type="button" aria-label="Ta bort ${escapeHtml(item)}">×</button>`;
+        chip.querySelector('button').onclick = () => { items.splice(i, 1); render(); };
+        box.insertBefore(chip, input);
+      });
+      store.set(storeKey, items);
+      onChange?.();
+    }
+    function add(raw) {
+      raw.split(/[,;]/).map(norm).filter(Boolean).forEach((v) => {
+        if (!items.some((x) => lc(x) === lc(v))) items.push(v);
+      });
+      input.value = '';
+      render();
+    }
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(input.value); }
+      else if (e.key === 'Backspace' && !input.value && items.length) { items.pop(); render(); }
+    });
+    input.addEventListener('blur', () => { if (input.value.trim()) add(input.value); });
+    box.addEventListener('click', () => input.focus());
+    render();
+    return { get: () => { if (input.value.trim()) add(input.value); return [...items]; } };
+  }
+
+  const keywords = chipInput('kwBox', 'kwInput', 'kw', 'jm.keywords', () => rerank());
+  const tools = chipInput('toolBox', 'toolInput', '', 'jm.tools', () => rerank());
+  const excluded = chipInput('exBox', 'exInput', 'ex', 'jm.exclude', () => rerank());
+
+  // ---------- Taxonomi: branscher, roller, län, kommuner, synonymer ----------
+  async function graphql(query) {
+    const res = await fetch(`${TAXONOMY_API}?query=${encodeURIComponent(query)}`);
+    if (!res.ok) throw new Error('Taxonomy ' + res.status);
+    return (await res.json()).data;
+  }
+  const byLabel = (a, b) => a.preferred_label.localeCompare(b.preferred_label, 'sv');
+  const options = (list) => list.map((c) => `<option value="${c.id}">${escapeHtml(c.preferred_label)}</option>`).join('');
+
+  async function loadTaxonomy() {
+    const cached = store.get('jm.taxonomy', null);
+    let data = cached && Date.now() - cached.at < 86400000 ? cached.data : null;
+    if (!data) {
+      const [f, r] = await Promise.all([
+        graphql('{concepts(type:"occupation-field"){id preferred_label narrower(type:"ssyk-level-4"){id preferred_label}}}'),
+        graphql('{concepts(id:"i46j_HmG_v64"){narrower(type:"region"){id preferred_label}}}'),
+      ]);
+      data = { fields: f.concepts, regions: r.concepts[0].narrower };
+      store.set('jm.taxonomy', { at: Date.now(), data });
+    }
+    fields = data.fields.sort(byLabel);
+    fields.forEach((f) => f.narrower.sort(byLabel));
+
+    $('field').innerHTML = '<option value="">Välj bransch…</option>' + options(fields);
+    $('region').innerHTML = '<option value="">Hela Sverige</option>' + options(data.regions.sort(byLabel));
+
+    const sel = store.get('jm.selection', {});
+    if (sel.field && fields.some((f) => f.id === sel.field)) $('field').value = sel.field;
+    fillGroups();
+    if (sel.group) $('group').value = sel.group;
+    if (sel.region) {
+      $('region').value = sel.region;
+      await fillMunicipalities();
+      if (sel.municipality) $('municipality').value = sel.municipality;
+    }
+  }
+
+  function fillGroups() {
+    const field = fields.find((f) => f.id === $('field').value);
+    $('group').innerHTML = '<option value="">Alla roller inom området</option>' + (field ? options(field.narrower) : '');
+    $('group').disabled = !field;
+  }
+
+  async function fillMunicipalities() {
+    const region = $('region').value;
+    const sel = $('municipality');
+    sel.innerHTML = '<option value="">Hela länet</option>';
+    sel.disabled = !region;
+    if (!region) return;
+    const cache = store.get('jm.municipalities', {});
+    if (!cache[region]) {
+      const d = await graphql(`{concepts(id:"${region}"){narrower(type:"municipality"){id preferred_label}}}`);
+      cache[region] = d.concepts[0].narrower.sort(byLabel);
+      store.set('jm.municipalities', cache);
+    }
+    sel.innerHTML += options(cache[region]);
+  }
+
+  // Synonymer ur kompetensregistret: begrepp som har flera namn,
+  // t.ex. "Artificial Intelligence/Artificiell intelligens/AI".
+  async function loadSynonyms() {
+    const cached = store.get('jm.synonyms', null);
+    if (cached && Date.now() - cached.at < 7 * 86400000) { taxonomySynonyms = cached.groups; return; }
+    const d = await graphql('{concepts(type:"skill"){preferred_label alternative_labels}}');
+    const groups = [];
+    for (const c of d.concepts) {
+      const labels = [...new Set([...cleanLabel(c.preferred_label), ...(c.alternative_labels || []).flatMap(cleanLabel)].map(lc))];
+      if (labels.length > 1) groups.push(labels);
+    }
+    taxonomySynonyms = groups;
+    store.set('jm.synonyms', { at: Date.now(), groups });
+    variantCache.clear();
+    rerank();
+  }
+
+  const variantCache = new Map();
+  function variantsFor(term) {
+    const k = lc(term);
+    if (!variantCache.has(k)) {
+      const set = new Set([term]);
+      for (const g of [...SYNONYM_GROUPS, ...taxonomySynonyms]) if (g.includes(k)) g.forEach((v) => set.add(v));
+      variantCache.set(k, [...set]);
+    }
+    return variantCache.get(k);
+  }
+
+  // Valda roller: flera kan läggas till. Har inga lagts till används det som
+  // står i listorna just nu.
+  let roles = store.get('jm.roles', []);
+  function currentSelection() {
+    if ($('group').value) return { id: $('group').value, label: $('group').selectedOptions[0].text, type: 'group' };
+    if ($('field').value) return { id: $('field').value, label: `${$('field').selectedOptions[0].text} (alla roller)`, type: 'field' };
+    return null;
+  }
+  const activeRoles = () => (roles.length ? roles : [currentSelection()].filter(Boolean));
+  function renderRoles() {
+    $('roleChips').innerHTML = roles.map((r, i) =>
+      `<span class="chip role">${escapeHtml(r.label)}<button type="button" data-i="${i}" aria-label="Ta bort">×</button></span>`).join('');
+    $('roleChips').querySelectorAll('button').forEach((b) => b.onclick = () => {
+      roles.splice(+b.dataset.i, 1); store.set('jm.roles', roles); renderRoles();
+    });
+  }
+  $('addRole').addEventListener('click', () => {
+    const r = currentSelection();
+    if (!r) { $('field').focus(); return; }
+    if (!roles.some((x) => x.id === r.id)) roles.push(r);
+    store.set('jm.roles', roles);
+    renderRoles();
+  });
+
+  function saveSelection() {
+    store.set('jm.selection', { field: $('field').value, group: $('group').value, region: $('region').value, municipality: $('municipality').value });
+  }
+  $('field').addEventListener('change', () => { fillGroups(); saveSelection(); });
+  $('group').addEventListener('change', saveSelection);
+  $('region').addEventListener('change', async () => { await fillMunicipalities().catch(console.error); saveSelection(); });
+  $('municipality').addEventListener('change', saveSelection);
+
+  // ---------- CV ----------
+  let cvText = '';
+  let cvName = '';
+  let cvTerms = [];
+  const removedCvTerms = new Set();
+
+  const loadScript = (src) => new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) return resolve();
+    const s = document.createElement('script');
+    s.src = src; s.onload = resolve; s.onerror = () => reject(new Error('Kunde inte ladda ' + src));
+    document.head.appendChild(s);
+  });
+
+  async function ocr(images, progress) {
+    await loadScript(TESSERACT_URL);
+    const worker = await Tesseract.createWorker('swe+eng');
+    try {
+      let out = '';
+      for (let i = 0; i < images.length; i++) {
+        progress?.(`Läser inskannad text med textigenkänning, sida ${i + 1} av ${images.length}… (kan ta en halv minut)`);
+        out += (await worker.recognize(images[i])).data.text + '\n';
+      }
+      return out;
+    } finally {
+      await worker.terminate();
+    }
+  }
+
+  async function readPdf(file, progress) {
+    await loadScript(PDFJS_BASE + 'pdf.min.js');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_BASE + 'pdf.worker.min.js';
+    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    const pages = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const content = await (await pdf.getPage(i)).getTextContent();
+      let line = '', out = '', lastY = null;
+      for (const item of content.items) {
+        const y = item.transform?.[5];
+        if (lastY !== null && Math.abs(y - lastY) > 2) { out += line + '\n'; line = ''; }
+        line += item.str + (item.hasEOL ? '\n' : ' ');
+        lastY = y;
+      }
+      pages.push(out + line);
+    }
+    const text = pages.join('\n');
+    if (text.replace(/\s/g, '').length >= 30) return text;
+
+    // Ingen text i PDF:en, alltså troligen inskannad: rendera sidorna och kör OCR.
+    const canvases = [];
+    for (let i = 1; i <= Math.min(pdf.numPages, 5); i++) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 2 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width; canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      canvases.push(canvas);
+    }
+    return ocr(canvases, progress);
+  }
+
+  async function readDocx(file) {
+    await loadScript(MAMMOTH_URL);
+    return (await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() })).value;
+  }
+
+  // Gamla Word-filer (.doc) är binära. Texten ligger antingen som 8-bitars
+  // eller UTF-16-tecken, så båda avkodas och den som ger mest läsbar text vinner.
+  async function readDoc(file) {
+    const buf = new Uint8Array(await file.arrayBuffer());
+    const runRe = /[A-Za-zÀ-ÖØ-öø-ÿ0-9][A-Za-zÀ-ÖØ-öø-ÿ0-9 \t.,:;@()\/+#&%–-]{5,}/g;
+    let best = '';
+    for (const enc of ['utf-16le', 'windows-1252']) {
+      const runs = (new TextDecoder(enc).decode(buf).match(runRe) || []).filter((r) => /[A-Za-zÀ-ÿ]{3}/.test(r));
+      const text = runs.join('\n');
+      if (text.length > best.length) best = text;
+    }
+    return best;
+  }
+
+  async function handleCv(file) {
+    if (!file) return;
+    const info = $('cvInfo');
+    info.hidden = false;
+    const progress = (msg) => { info.innerHTML = escapeHtml(msg); };
+    progress('Läser CV…');
+    try {
+      const name = lc(file.name);
+      let text;
+      if (name.endsWith('.pdf')) text = await readPdf(file, progress);
+      else if (name.endsWith('.docx')) text = await readDocx(file);
+      else if (name.endsWith('.doc')) text = await readDoc(file);
+      else if (/\.(png|jpe?g|webp)$/.test(name)) text = await ocr([file], progress);
+      else text = await file.text();
+      text = text.replace(/ /g, ' ');
+      if (text.trim().length < 30) throw new Error('Hittade ingen läsbar text i filen. Prova att spara CV:t som PDF eller .docx.');
+      cvText = text;
+      cvName = file.name;
+      removedCvTerms.clear();
+      extractCvTerms(ads);
+      renderCvInfo();
+      rerank();
+    } catch (err) {
+      console.error(err);
+      info.innerHTML = `<span style="color:var(--warn)">${escapeHtml(err.message)}</span>`;
+    }
+  }
+
+  // Plockar ut kompetenser ur CV:t: ordlistan ovan, kompetenser som annonserna
+  // själva anger samt system-/produktnamn (versalinledda ord mitt i en mening,
+  // förkortningar) som också förekommer i de hämtade annonserna.
+  function extractCvTerms(adList) {
+    if (!cvText) { cvTerms = []; return; }
+    const found = new Map();
+    const add = (t) => { const k = lc(t); if (!found.has(k) && !removedCvTerms.has(k)) found.set(k, t); };
+
+    SKILL_DICTIONARY.forEach((t) => {
+      const caseSensitive = /^\p{Lu}/u.test(t);
+      if (termRegex(t, caseSensitive ? 'u' : 'iu').test(cvText)) add(t.charAt(0).toUpperCase() + t.slice(1));
+    });
+
+    if (adList.length) {
+      const cvLower = lc(cvText);
+      adList.forEach((ad) => adSkills(ad).forEach((s) => { if (hasTerm(cvText, s, cvLower)) add(s); }));
+
+      const candidates = new Map();
+      const re = /(?<=\p{Ll}[ \t]+|[,;:/(&][ \t]*|(?:^|\s)[-–•*·][ \t]*)([\p{Lu}][\p{L}\p{N}+#.\-]{1,30})|(?<![\p{L}])([\p{Lu}]{2,}[\p{N}+#]*|[\p{L}]+[+#]+|[\p{L}]+\d+[\p{L}\d]*)(?![\p{L}])/gmu;
+      for (const m of cvText.matchAll(re)) {
+        const word = (m[1] || m[2]).replace(/[.\-]+$/, '');
+        const k = lc(word);
+        if (word.length < 2 || STOPWORDS.has(k)) continue;
+        // Hoppa över delar av redan hittade termer, t.ex. "BI" ur "Power BI".
+        if ([...found.keys()].some((f) => f !== k && f.split(/[\s\-/]+/).includes(k))) continue;
+        candidates.set(k, word);
+      }
+      const ranked = [];
+      for (const [k, word] of candidates) {
+        if (found.has(k)) continue;
+        const df = adList.filter((ad) => hasTerm(adText(ad), word, adLower(ad))).length;
+        if (df >= 2 && df <= Math.max(3, adList.length * 0.35)) ranked.push([word, df]);
+      }
+      ranked.sort((a, b) => b[1] - a[1]).slice(0, 15).forEach(([w]) => add(w));
+    }
+    cvTerms = [...found.values()].slice(0, 40);
+  }
+
+  function renderCvInfo() {
+    const info = $('cvInfo');
+    if (!cvText) { info.hidden = true; return; }
+    info.hidden = false;
+    info.innerHTML = `
+      <div class="row"><span>📄 ${escapeHtml(cvName)}</span><button class="linkbtn" id="cvRemove">Ta bort</button></div>
+      <div class="hint" style="margin-top:6px">${cvTerms.length
+        ? `Hittade ${cvTerms.length} kompetenser i ditt CV. Klicka × på det som inte stämmer.`
+        : 'Hittade inga tydliga verktyg/kompetenser ännu. Fler kan dyka upp efter en sökning.'}</div>
+      <div class="chips">${cvTerms.map((t) => `<span class="chip">${escapeHtml(t)}<button type="button" data-term="${escapeHtml(t)}" aria-label="Ta bort">×</button></span>`).join('')}</div>`;
+    $('cvRemove').onclick = () => { cvText = ''; cvName = ''; cvTerms = []; $('cvFile').value = ''; renderCvInfo(); rerank(); };
+    info.querySelectorAll('.chips button').forEach((b) => b.onclick = () => {
+      removedCvTerms.add(lc(b.dataset.term));
+      cvTerms = cvTerms.filter((t) => t !== b.dataset.term);
+      renderCvInfo();
+      rerank();
+    });
+  }
+
+  const drop = $('drop');
+  drop.addEventListener('click', () => $('cvFile').click());
+  drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('cvFile').click(); } });
+  $('cvFile').addEventListener('change', (e) => handleCv(e.target.files[0]));
+  ['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', (e) => handleCv(e.dataTransfer.files[0]));
+
+  // ---------- Annonstext ----------
+  const adSkills = (ad) => ['must_have', 'nice_to_have'].flatMap((k) => (ad[k]?.skills || []).flatMap((s) => cleanLabel(s.label)));
+
+  function adText(ad) {
+    if (!ad._text) ad._text = [ad.headline, ad.occupation?.label, ad.description?.text, adSkills(ad).join('\n')].filter(Boolean).join('\n');
+    return ad._text;
+  }
+  function adLower(ad) {
+    if (!ad._lower) ad._lower = lc(adText(ad));
+    return ad._lower;
+  }
+
+  // Delar upp annonstexten i krav och meriter utifrån rubriker och fraser som
+  // "Krav", "Vi söker dig som", "Meriterande" och "Det är ett plus om".
+  function adSections(ad) {
+    if (ad._req !== undefined) return ad;
+    const req = (ad.must_have?.skills || []).flatMap((s) => cleanLabel(s.label));
+    let mode = null;
+    for (const line of (ad.description?.text || '').split('\n')) {
+      const l = lc(line).trim();
+      if (/meriter|plus om|ett plus|önskvärt|bonus|nice to have|fördel om|det är bra om/.test(l)) mode = 'merit';
+      else if (/krav|kvalifikation|vi söker dig som|du har|du är|requirements|must have|förutsättning|vi tror att du|din profil|om dig/.test(l)) mode = 'req';
+      else if (/^(om (oss|företaget|tjänsten|rollen|jobbet)|vi erbjuder|arbetsuppgifter|ansökan|anställningsvillkor|övrigt|lön|tillträde)/.test(l)) mode = null;
+      if (mode === 'req') req.push(line);
+    }
+    ad._req = req.join('\n');
+    ad._reqLower = lc(ad._req);
+    return ad;
+  }
+
+  // ---------- Sökning ----------
+  async function fetchAds(pairs) {
+    const url = new URL(SEARCH_API);
+    pairs.forEach(([k, v]) => { if (v !== '' && v != null) url.searchParams.append(k, v); });
+    const res = await fetch(url, { headers: { accept: 'application/json' } });
+    if (!res.ok) throw new Error(`Platsbanken svarade ${res.status}`);
+    return res.json();
+  }
+
+  function filterParams() {
+    const p = [['published-after', DAYS * 24 * 60]];   // minuter bakåt i tiden
+    activeRoles().forEach((r) => p.push([r.type === 'field' ? 'occupation-field' : 'occupation-group', r.id]));
+    if ($('municipality').value) p.push(['municipality', $('municipality').value]);
+    else if ($('region').value) p.push(['region', $('region').value]);
+    return p;
+  }
+
+  // Samma annons ligger ibland ute en gång per ort. Slå ihop dem och visa orterna.
+  function dedupe(list) {
+    const groups = new Map();
+    for (const ad of list) {
+      const key = lc(norm(ad.headline || '')) + '|' + lc(ad.employer?.name);
+      const place = ad.workplace_address?.municipality;
+      const g = groups.get(key);
+      if (!g) { ad._places = place ? [place] : []; groups.set(key, ad); continue; }
+      if (place && !g._places.includes(place)) g._places.push(place);
+      (g._dupIds ||= []).push(ad.id);
+    }
+    return [...groups.values()];
+  }
+
+  async function search({ silent = false, fromWatch = false } = {}) {
+    if (searching) return;
+    searching = true;
+    const btn = $('searchBtn');
+    if (!silent) {
+      btn.disabled = true; btn.textContent = 'Söker…';
+      $('results').innerHTML = '<div class="status">Hämtar annonser från de senaste 7 dagarna…</div>';
+      $('filters').hidden = true;
+      setView('results');
+    }
+    const filters = filterParams();
+    const queryTerms = [...new Set([...keywords.get(), ...tools.get(), ...cvTerms].map(lc))].slice(0, MAX_TERM_QUERIES);
+
+    try {
+      // De senaste annonserna inom filtret + riktade sökningar per nyckelord,
+      // så att träffar inte missas när det finns fler annonser än vi hämtar.
+      const requests = [];
+      for (let p = 0; p < BASE_PAGES; p++) requests.push(fetchAds([...filters, ['sort', 'pubdate-desc'], ['limit', 100], ['offset', p * 100]]));
+      queryTerms.forEach((q) => requests.push(fetchAds([...filters, ['q', q], ['sort', 'pubdate-desc'], ['limit', 100]])));
+
+      const results = await Promise.allSettled(requests);
+      const ok = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+      if (!ok.length) throw results[0].reason;
+      totalAvailable = ok[0].total?.value ?? 0;
+
+      const cutoff = Date.now() - DAYS * 86400000;
+      const byId = new Map();
+      ok.forEach((r) => r.hits.forEach((ad) => {
+        if (!byId.has(ad.id) && new Date(ad.publication_date).getTime() >= cutoff) byId.set(ad.id, ad);
+      }));
+      const previousIds = new Set(ads.map((a) => a.id));
+      ads = dedupe([...byId.values()]);
+      searchedOnce = true;
+
+      extractCvTerms(ads);
+      renderCvInfo();
+      computeScores();
+
+      if (fromWatch) {
+        const fresh = ads.filter((a) => !seen[a.id] && !previousIds.has(a.id) && passesFilters(a));
+        if (fresh.length) notifyNew(fresh.length, silent);
+      }
+      if (!silent) shown = PAGE_SIZE;
+      renderResults();
+    } catch (err) {
+      console.error(err);
+      if (!silent) $('results').innerHTML = `<div class="status error">Kunde inte hämta annonser: ${escapeHtml(err.message)}. Kontrollera internetanslutningen och försök igen.</div>`;
+    } finally {
+      searching = false;
+      btn.disabled = false; btn.textContent = 'Sök jobb';
+    }
+  }
+
+  // ---------- Matchning ----------
+  function buildTerms() {
+    const list = [];
+    const seenTerms = new Set();
+    const push = (t, type) => { const k = lc(t); if (!seenTerms.has(k)) { seenTerms.add(k); list.push({ term: t, type, variants: variantsFor(t) }); } };
+    keywords.get().forEach((t) => push(t, 'kw'));
+    tools.get().forEach((t) => push(t, 'tool'));
+    cvTerms.forEach((t) => push(t, 'cv'));
+    return list;
+  }
+
+  function scoreAd(ad, terms) {
+    const text = adText(ad), lower = adLower(ad);
+    const head = ad.headline || '', headLower = lc(head);
+    adSections(ad);
+    const matched = [], missed = [];
+    let got = 0, total = 0, cvTotal = 0;
+    for (const t of terms) {
+      const w = WEIGHT[t.type];
+      if (t.type === 'cv') cvTotal += w; else total += w;
+      const hit = firstHit(text, lower, t.variants);
+      if (hit) {
+        const req = !!firstHit(ad._req, ad._reqLower, t.variants);
+        const inHead = !!firstHit(head, headLower, t.variants);
+        got += w * (inHead ? HEADLINE_BOOST : req ? REQUIREMENT_BOOST : 1);
+        matched.push({ ...t, req, via: lc(hit) !== lc(t.term) ? hit : null });
+      } else if (t.type !== 'cv') missed.push(t);
+    }
+    // CV-termer kan vara många, så de räknas mot ett tak för att inte dra ner
+    // procenten för annonser som matchar det du själv skrivit.
+    const denom = total + Math.min(cvTotal, 8 * WEIGHT.cv);
+    const pct = denom ? Math.min(100, Math.round((got / denom) * 100)) : null;
+
+    // Kompetenser som annonsen kräver men som inte finns bland dina termer.
+    const lacking = terms.some((t) => t.type !== 'kw')
+      ? [...new Set((ad.must_have?.skills || []).flatMap((s) => cleanLabel(s.label).slice(0, 1)))]
+        .filter((l) => !terms.some((t) => t.variants.some((v) => hasTerm(l, v) || hasTerm(v, l)))).slice(0, 4)
+      : [];
+    return { pct, matched, missed, lacking };
+  }
+
+  function computeScores() {
+    currentTerms = buildTerms();
+    const all = [...ads, ...Object.values(saved)];
+    all.forEach((ad) => { ad._score = scoreAd(ad, currentTerms); });
+  }
+
+  function rerank() {
+    if (!ready || (!searchedOnce && view !== 'saved')) return;
+    computeScores();
+    renderResults();
+  }
+
+  // ---------- Filter ----------
+  const FILTER_IDS = ['sort', 'fWorkplace', 'fHours', 'fEmployment', 'onlyMatch', 'onlyNew', 'showHidden'];
+  function loadFilters() {
+    const f = store.get('jm.filters', {});
+    FILTER_IDS.forEach((id) => {
+      const el = $(id);
+      if (f[id] === undefined) return;
+      if (el.type === 'checkbox') el.checked = f[id]; else el.value = f[id];
+    });
+  }
+  function saveFilters() {
+    store.set('jm.filters', Object.fromEntries(FILTER_IDS.map((id) => [id, $(id).type === 'checkbox' ? $(id).checked : $(id).value])));
+  }
+  FILTER_IDS.forEach((id) => $(id).addEventListener('change', () => { saveFilters(); shown = PAGE_SIZE; renderResults(); }));
+
+  const REMOTE_RE = /distans|på distans|remote|hemifrån|arbeta hemma/i;
+  function passesFilters(ad) {
+    if (hidden.has(ad.id) && !$('showHidden').checked) return false;
+    const hasTerms = currentTerms.length > 0;
+    if ($('onlyMatch').checked && hasTerms && !ad._score?.matched.length) return false;
+    if ($('onlyNew').checked && !isNew(ad)) return false;
+
+    const wp = $('fWorkplace').value;
+    if (wp) {
+      const label = ad.workplace_model?.label || '';
+      const remoteText = !label && REMOTE_RE.test(adText(ad));
+      const remote = label === 'Distansarbete' || remoteText;
+      const hybrid = label === 'Hybridarbete';
+      if (wp === 'remote' && !remote) return false;
+      if (wp === 'hybrid' && !remote && !hybrid) return false;
+      if (wp === 'onsite' && (remote || hybrid)) return false;
+    }
+    const hours = ad.working_hours_type?.label || '';
+    if ($('fHours').value === 'full' && !hours.startsWith('Heltid')) return false;
+    if ($('fHours').value === 'part' && !hours.startsWith('Deltid')) return false;
+    // "Vanlig anställning" är den äldre benämningen på tillsvidareanställning.
+    const emp = ad.employment_type?.label || '';
+    const permanent = /tillsvidare|vanlig anställning/i.test(emp);
+    if ($('fEmployment').value === 'perm' && !permanent) return false;
+    if ($('fEmployment').value === 'temp' && (!emp || permanent)) return false;
+
+    const text = adText(ad), lower = adLower(ad);
+    if (excluded.get().some((x) => firstHit(text, lower, variantsFor(x)))) return false;
+    return true;
+  }
+
+  // ---------- Visning ----------
+  function setView(v) {
+    view = v;
+    document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === v));
+  }
+  document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => {
+    setView(b.dataset.view); shown = PAGE_SIZE; computeScores(); renderResults();
+  }));
+  const updateSavedCount = () => { $('savedCount').textContent = Object.keys(saved).length; };
+
+  function renderResults() {
+    updateSavedCount();
+    const hasTerms = currentTerms.length > 0;
+    $('onlyMatchWrap').style.display = hasTerms ? '' : 'none';
+
+    if (view === 'saved') {
+      $('filters').hidden = true;
+      const list = Object.values(saved).sort((a, b) => b.publication_date.localeCompare(a.publication_date));
+      $('results').innerHTML = list.length
+        ? `<p class="count">${list.length} sparade annonser</p>` + list.map((ad) => jobCard(ad, hasTerms)).join('')
+        : '<div class="status">Inga sparade annonser ännu. Klicka <strong>☆ Spara</strong> på en annons för att samla den här.</div>';
+      return;
+    }
+    if (!searchedOnce) return;
+    if (!ads.length) {
+      $('filters').hidden = true;
+      $('results').innerHTML = '<div class="status">Inga annonser publicerade de senaste 7 dagarna matchade ditt urval. Prova en bredare roll eller ett annat län.</div>';
+      return;
+    }
+
+    const sort = $('sort').value;
+    const list = ads.filter(passesFilters);
+    list.sort((a, b) => sort === 'match' && hasTerms
+      ? (b._score.pct - a._score.pct) || b.publication_date.localeCompare(a.publication_date)
+      : b.publication_date.localeCompare(a.publication_date));
+
+    $('filters').hidden = false;
+    const filteredOut = ads.length - list.length;
+    const more = totalAvailable > ads.length && !roles.length && !activeRoles().length
+      ? ' Välj bransch eller roll för att se fler.' : '';
+    $('results').innerHTML =
+      `<p class="count">${list.length.toLocaleString('sv-SE')} annonser senaste 7 dagarna` +
+      `<span class="sub">${filteredOut ? ` · ${filteredOut} bortfiltrerade` : ''}${more}</span></p>` +
+      (list.length
+        ? list.slice(0, shown).map((ad) => jobCard(ad, hasTerms)).join('') +
+          (list.length > shown ? `<div class="more"><button class="secondary" data-action="more">Visa fler (${list.length - shown} kvar)</button></div>` : '')
+        : '<div class="status">Inga annonser kvar med de här filtren. Prova att ändra filtren ovan.</div>');
+
+    // Allt som visats räknas som sett, så att det inte markeras som nytt nästa gång.
+    const now = Date.now();
+    ads.forEach((a) => { if (!seen[a.id]) seen[a.id] = now; });
+    store.set('jm.seen', seen);
+  }
+
+  function snippet(text = '') {
+    const t = text.replace(/\n{2,}/g, '\n').trim();
+    return t.length > 320 ? t.slice(0, 320).replace(/\s+\S*$/, '') + '…' : t;
+  }
+
+  function highlight(text, terms) {
+    let html = escapeHtml(text);
+    const variants = [...new Set(terms.flatMap((t) => t.variants))].sort((a, b) => b.length - a.length);
+    variants.forEach((v) => { html = html.replace(termRegex(escapeHtml(v), 'giu'), (m) => `<mark>${m}</mark>`); });
+    return html;
+  }
+
+  function jobCard(ad, hasTerms) {
+    const when = relativeDate(ad.publication_date);
+    const places = ad._places?.length ? ad._places : [ad.workplace_address?.municipality].filter(Boolean);
+    const region = ad.workplace_address?.region;
+    const place = places.length
+      ? `${places[0]}${places.length > 1 ? ` +${places.length - 1} orter` : region ? ', ' + region : ''}`
+      : ad.workplace_model?.label || 'Ort ej angiven';
+    const deadline = ad.application_deadline ? new Date(ad.application_deadline) : null;
+    const daysLeft = deadline ? Math.ceil((deadline - Date.now()) / 86400000) : null;
+    const s = ad._score || { pct: null, matched: [], missed: [], lacking: [] };
+    const color = s.pct >= 60 ? 'var(--good)' : s.pct >= 30 ? 'var(--mid)' : 'var(--low)';
+    const id = escapeHtml(ad.id);
+    const isSaved = !!saved[ad.id], isApplied = !!applied[ad.id], isHidden = hidden.has(ad.id);
+
+    const badges = [
+      isNew(ad) && '<span class="badge new">NY</span>',
+      isApplied && `<span class="badge applied">✓ Sökt ${new Date(applied[ad.id]).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}</span>`,
+      daysLeft !== null && daysLeft >= 0 && daysLeft <= DEADLINE_SOON_DAYS && `<span class="badge urgent">⏰ Sista dag ${daysLeft === 0 ? 'idag' : `om ${daysLeft} dag${daysLeft > 1 ? 'ar' : ''}`}</span>`,
+      daysLeft !== null && daysLeft < 0 && '<span class="badge urgent">Ansökningstiden har gått ut</span>',
+      ad.salary_description && `<span class="badge salary">💰 ${escapeHtml(ad.salary_description.slice(0, 80))}</span>`,
+      ad.workplace_model?.label && ad.workplace_model.label !== 'Arbete på plats' && `<span class="badge">${escapeHtml(ad.workplace_model.label)}</span>`,
+      ad.driving_license_required && '<span class="badge">🚗 Körkort krävs</span>',
+      ad.experience_required === false && '<span class="badge">Ingen erfarenhet krävs</span>',
+    ].filter(Boolean).join('');
+
+    const scoreHtml = hasTerms ? `
+      <div class="score" title="Andel av dina nyckelord, verktyg och CV-kompetenser som finns i annonsen. Träffar i rubriken och kravdelen väger tyngre.">
+        <div class="pct" style="color:${color}">${s.pct}%</div>
+        <div class="lbl">matchning</div>
+        <div class="bar"><span style="width:${s.pct}%;background:${color}"></span></div>
+      </div>` : '';
+    const typeLabel = { kw: 'Nyckelord', tool: 'Verktyg/system', cv: 'Från ditt CV' };
+    const tags = hasTerms ? `
+      <div class="matched">
+        ${s.matched.map((t) => `<span class="tag ${t.type === 'cv' ? 'cv' : ''} ${t.req ? 'req' : ''}" title="${typeLabel[t.type]}${t.req ? ' · står bland kraven' : ''}${t.via ? ` · hittades som "${escapeHtml(t.via)}"` : ''}">✓ ${escapeHtml(t.term)}${t.req ? ' <small>krav</small>' : ''}</span>`).join('')}
+        ${s.missed.map((t) => `<span class="tag miss" title="Finns inte i annonsen">${escapeHtml(t.term)}</span>`).join('')}
+        ${s.lacking.map((l) => `<span class="tag lack" title="Annonsen kräver detta men det finns inte bland dina verktyg eller i ditt CV">Krav: ${escapeHtml(l)}</span>`).join('')}
+      </div>` : '';
+
+    return `
+      <article class="job ${isHidden ? 'dim' : ''}">
+        <div class="job-top">
+          <div>
+            <h2><a href="${escapeHtml(ad.webpage_url)}" target="_blank" rel="noopener">${escapeHtml(ad.headline)}</a></h2>
+            <div class="employer">${escapeHtml(ad.employer?.name || '')}</div>
+            <div class="meta">
+              <span class="${when.fresh ? 'fresh' : ''}">🕒 ${when.text}</span>
+              <span title="${escapeHtml(places.join(', '))}">📍 ${escapeHtml(place)}</span>
+              ${ad.occupation?.label ? `<span>💼 ${escapeHtml(ad.occupation.label)}</span>` : ''}
+              ${ad.working_hours_type?.label ? `<span>${escapeHtml(ad.working_hours_type.label)}</span>` : ''}
+              ${ad.employment_type?.label ? `<span>${escapeHtml(ad.employment_type.label.replace(/\s*\(.*\)/, ''))}</span>` : ''}
+              ${deadline ? `<span>Sök senast ${deadline.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}</span>` : ''}
+            </div>
+            ${badges ? `<div class="badges">${badges}</div>` : ''}
+          </div>
+          ${scoreHtml}
+        </div>
+        ${tags}
+        <div class="desc" id="desc-${id}" data-open="0">${highlight(snippet(ad.description?.text), currentTerms)}</div>
+        <div class="ai" id="ai-${id}">${ad._ai ? aiHtml(ad._ai) : ''}</div>
+        <div class="actions">
+          <button class="linkbtn" data-action="toggle" data-id="${id}">Visa hela annonsen</button>
+          <a href="${escapeHtml(ad.webpage_url)}" target="_blank" rel="noopener">Öppna i Platsbanken ↗</a>
+          <button class="linkbtn" data-action="save" data-id="${id}">${isSaved ? '★ Sparad' : '☆ Spara'}</button>
+          <button class="linkbtn" data-action="applied" data-id="${id}">${isApplied ? 'Ångra sökt' : '✓ Markera som sökt'}</button>
+          <button class="linkbtn" data-action="hide" data-id="${id}">${isHidden ? 'Visa igen' : 'Dölj'}</button>
+          <button class="linkbtn" data-action="ai" data-id="${id}">🤖 AI-analys</button>
+        </div>
+      </article>`;
+  }
+
+  const findAd = (id) => ads.find((a) => a.id === id) || saved[id];
+
+  $('results').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const ad = id && findAd(id);
+    switch (btn.dataset.action) {
+      case 'more':
+        shown += PAGE_SIZE; renderResults(); return;
+      case 'toggle': {
+        const desc = $('desc-' + id);
+        const open = desc.dataset.open === '1';
+        desc.innerHTML = highlight(open ? snippet(ad.description?.text) : ad.description?.text || '', currentTerms);
+        desc.dataset.open = open ? '0' : '1';
+        btn.textContent = open ? 'Visa hela annonsen' : 'Visa mindre';
+        return;
+      }
+      case 'save':
+        if (saved[id]) delete saved[id]; else saved[id] = ad;
+        store.set('jm.saved', saved);
+        break;
+      case 'applied':
+        if (applied[id]) delete applied[id]; else { applied[id] = Date.now(); if (!saved[id]) { saved[id] = ad; store.set('jm.saved', saved); } }
+        store.set('jm.applied', applied);
+        break;
+      case 'hide':
+        if (hidden.has(id)) hidden.delete(id); else hidden.add(id);
+        store.set('jm.hidden', [...hidden]);
+        break;
+      case 'ai':
+        analyzeAd(ad); return;
+    }
+    renderResults();
+  });
+
+  // ---------- Bevakning ----------
+  function notifyNew(count, silent) {
+    const msg = `${count} ${count === 1 ? 'ny annons' : 'nya annonser'} sedan ${silent ? 'senaste kollen' : 'ditt förra besök'}.`;
+    const banner = $('banner');
+    banner.hidden = false;
+    banner.textContent = `🔔 ${msg} De är markerade med NY.`;
+    if (silent) {
+      document.title = `(${count}) Jobbmatchen`;
+      if ('Notification' in window && Notification.permission === 'granted') {
+        const n = new Notification('Jobbmatchen', { body: msg + ' Klicka för att se dem.' });
+        n.onclick = () => { window.focus(); n.close(); };
+      }
+    }
+  }
+  window.addEventListener('focus', () => { document.title = 'Jobbmatchen'; });
+
+  function setupWatch() {
+    clearInterval(watchTimer);
+    if ($('watch').checked) watchTimer = setInterval(() => search({ silent: true, fromWatch: true }), WATCH_INTERVAL);
+  }
+  $('watch').checked = store.get('jm.watch', false);
+  $('watch').addEventListener('change', async () => {
+    if ($('watch').checked && 'Notification' in window && Notification.permission === 'default') {
+      try { await Notification.requestPermission(); } catch { /* notiser stöds inte */ }
+    }
+    store.set('jm.watch', $('watch').checked);
+    setupWatch();
+  });
+
+  // ---------- AI-analys ----------
+  const AI_SCHEMA = {
+    type: 'object',
+    properties: {
+      matchning: { type: 'integer', description: 'Hur väl kandidaten passar tjänsten, 0–100' },
+      sammanfattning: { type: 'string', description: 'Två till tre meningar om helhetsbedömningen' },
+      styrkor: { type: 'array', items: { type: 'string' }, description: 'Konkreta skäl till att kandidaten passar' },
+      luckor: { type: 'array', items: { type: 'string' }, description: 'Krav eller önskemål kandidaten inte verkar uppfylla' },
+      tips: { type: 'string', description: 'Ett konkret tips för ansökan eller personligt brev' },
+    },
+    required: ['matchning', 'sammanfattning', 'styrkor', 'luckor', 'tips'],
+    additionalProperties: false,
+  };
+
+  function aiHtml(r) {
+    const list = (items) => items.length ? `<ul>${items.map((i) => `<li>${escapeHtml(i)}</li>`).join('')}</ul>` : '<p>–</p>';
+    return `
+      <h3>🤖 AI-bedömning: ${escapeHtml(r.matchning)}% matchning</h3>
+      <p>${escapeHtml(r.sammanfattning)}</p>
+      <strong>Styrkor</strong>${list(r.styrkor)}
+      <strong>Luckor</strong>${list(r.luckor)}
+      <strong>Tips för ansökan:</strong> ${escapeHtml(r.tips)}`;
+  }
+
+  let sdk = null;
+  async function analyzeAd(ad) {
+    const box = $('ai-' + ad.id);
+    const apiKey = store.get('jm.apiKey', '');
+    if (!apiKey) {
+      box.innerHTML = '<span class="err">Lägg in din Anthropic API-nyckel under <strong>🤖 AI-analys</strong> i vänsterspalten först.</span>';
+      $('aiSettings').open = true;
+      return;
+    }
+    if (!cvText && !currentTerms.length) {
+      box.innerHTML = '<span class="err">Ladda upp ditt CV eller lägg till nyckelord/verktyg så att AI:n har något att jämföra med.</span>';
+      return;
+    }
+    box.innerHTML = 'Analyserar annonsen mot din profil…';
+    try {
+      sdk ||= await import(SDK_URL);
+      const client = new sdk.default({ apiKey, dangerouslyAllowBrowser: true });
+      const response = await client.beta.messages.create({
+        model: AI_MODEL,
+        max_tokens: 16000,
+        betas: ['server-side-fallback-2026-07-01'],
+        fallbacks: 'default',
+        output_config: { effort: 'medium', format: { type: 'json_schema', schema: AI_SCHEMA } },
+        system: 'Du är en erfaren rekryterare i Sverige. Bedöm hur väl kandidaten passar jobbannonsen. ' +
+          'Var konkret och ärlig, skriv på svenska och utgå bara från det som står i underlagen. ' +
+          'Skilj på ska-krav och meriterande i annonsen när du väger samman bedömningen.',
+        messages: [{
+          role: 'user',
+          content:
+            `## Kandidaten\nNyckelord: ${keywords.get().join(', ') || '–'}\nVerktyg och system: ${tools.get().join(', ') || '–'}\n\n` +
+            `CV:\n${cvText || '(inget CV uppladdat)'}\n\n` +
+            `## Jobbannonsen\nRubrik: ${ad.headline}\nArbetsgivare: ${ad.employer?.name || '–'}\nYrke: ${ad.occupation?.label || '–'}\n` +
+            `Ska-krav enligt annonsens metadata: ${(ad.must_have?.skills || []).map((s) => s.label).join(', ') || '–'}\n\n` +
+            (ad.description?.text || ''),
+        }],
+      });
+      if (response.stop_reason === 'refusal') throw new Error('AI:n kunde inte analysera den här annonsen.');
+      if (response.stop_reason === 'max_tokens') throw new Error('Svaret blev för långt. Försök igen.');
+      const text = response.content.find((b) => b.type === 'text')?.text;
+      ad._ai = JSON.parse(text);
+      box.innerHTML = aiHtml(ad._ai);
+    } catch (err) {
+      console.error(err);
+      let msg = err.message;
+      if (sdk && err instanceof sdk.default.AuthenticationError) msg = 'API-nyckeln godkändes inte. Kontrollera den under AI-analys.';
+      else if (sdk && err instanceof sdk.default.PermissionDeniedError) msg = 'API-nyckeln saknar behörighet till modellen.';
+      else if (sdk && err instanceof sdk.default.RateLimitError) msg = 'För många anrop just nu. Vänta en stund och försök igen.';
+      else if (sdk && err instanceof sdk.default.APIConnectionError) msg = 'Kunde inte nå Anthropic. Kontrollera internetanslutningen.';
+      else if (sdk && err instanceof sdk.default.APIError) msg = `Anthropic svarade med fel ${err.status ?? ''}: ${err.message}`;
+      box.innerHTML = `<span class="err">${escapeHtml(msg)}</span>`;
+    }
+  }
+
+  function renderKeyStatus() {
+    const key = store.get('jm.apiKey', '');
+    $('keyStatus').textContent = key ? `✓ Nyckel sparad (…${key.slice(-4)})` : 'Ingen nyckel sparad.';
+  }
+  $('saveKey').addEventListener('click', () => {
+    const key = $('apiKey').value.trim();
+    if (!key) return;
+    store.set('jm.apiKey', key);
+    $('apiKey').value = '';
+    renderKeyStatus();
+  });
+  $('clearKey').addEventListener('click', () => {
+    try { localStorage.removeItem('jm.apiKey'); } catch { /* ignoreras */ }
+    renderKeyStatus();
+  });
+
+  // ---------- Start ----------
+  $('searchBtn').addEventListener('click', () => {
+    if (!activeRoles().length && !keywords.get().length && !tools.get().length && !cvText) {
+      $('results').innerHTML = '<div class="status">Välj minst en bransch eller roll, eller lägg till nyckelord, så att sökningen blir relevant.</div>';
+      return;
+    }
+    $('banner').hidden = true;
+    search();
+  });
+
+  ready = true;
+  loadFilters();
+  renderRoles();
+  renderKeyStatus();
+  updateSavedCount();
+  loadSynonyms().catch((err) => console.warn('Synonymer kunde inte laddas', err));
+  loadTaxonomy()
+    .then(() => {
+      setupWatch();
+      if ($('watch').checked && (activeRoles().length || keywords.get().length || tools.get().length)) search({ fromWatch: true });
+    })
+    .catch((err) => {
+      console.error(err);
+      $('field').innerHTML = '<option value="">Kunde inte ladda branscher. Ladda om sidan.</option>';
+    });
+})();
+</script>
+</body>
+</html>
