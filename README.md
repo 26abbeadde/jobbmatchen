@@ -7,7 +7,8 @@ Hittar jobbannonser som publicerats de senaste 7 dagarna och visar hur väl de m
 ## Funktioner
 
 - **Bransch, roller, län/kommun**: välj en eller flera roller ur Arbetsförmedlingens yrkesregister.
-- **Pendlingsavstånd**: ange din ort eller använd din position och visa bara jobb inom t.ex. 30 km.
+- **Pendlingsavstånd**: ange din ort eller använd din position och visa bara jobb inom t.ex. 30 km. Annonser som bara anger kommun får ett ungefärligt avstånd. Med en egen Trafiklab-nyckel visas även restid med kollektivtrafik.
+- **Kompetenser & lön**: vilka kompetenser som efterfrågas mest i annonserna och vilka du saknar, samt medianlön och lönespann per yrke från SCB.
 - **Fler källor**: annonser från Platsbanken plus andra jobbsajter via JobTech Links.
 - **Matchning**: nyckelord, verktyg och CV ger en procentsiffra per annons. Träffar i rubriken och kravdelen väger tyngre, synonymer räknas och krav du saknar visas.
 - **Lär av dina val**: annonser som liknar dem du sparat hamnar högre, och sådana som liknar dem du dolt hamnar lägre.
@@ -32,6 +33,9 @@ Ingen byggprocess, bara statiska filer och ES-moduler:
 | `js/tracker.js` | Ansökningsuppföljning och påminnelser |
 | `js/sources.js` | Hämtning från JobSearch och JobTech Links |
 | `js/store.js` | Lagring och export/import |
+| `js/skills.js` | Kompetensöversikt |
+| `js/salary.js` | Lönestatistik från SCB |
+| `js/transit.js` | Restid via Trafiklab ResRobot |
 | `js/taxonomy.js`, `js/geo.js`, `js/cv.js`, `js/ai.js` | Register, platser, CV-läsning, AI |
 
 ```bash
@@ -41,4 +45,4 @@ npm test       # kör testerna (Node 20+)
 
 Appen kräver en webbserver, eftersom ES-moduler inte laddas från `file://`. På Windows räcker det att dubbelklicka på `Starta Jobbmatchen.bat`.
 
-Annonsdata: [JobTech / Arbetsförmedlingen](https://jobtechdev.se/). Ortsökning: [OpenStreetMap Nominatim](https://nominatim.openstreetmap.org/).
+Annonsdata: [JobTech / Arbetsförmedlingen](https://jobtechdev.se/). Lönestatistik: [SCB](https://www.scb.se/) (lönestrukturstatistiken). Ortsökning: [OpenStreetMap Nominatim](https://nominatim.openstreetmap.org/). Restid: [Trafiklab ResRobot](https://www.trafiklab.se/).

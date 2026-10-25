@@ -13,6 +13,30 @@ export function currentPosition() {
   });
 }
 
+// Kommunernas ungefärliga mittpunkt, räknad som medelvärdet av koordinaterna
+// i de annonser som har sådana. Används för annonser som bara anger kommun.
+export function municipalityCentroids(ads, known = {}) {
+  const sums = {};
+  for (const ad of ads) {
+    const name = ad.workplace_address?.municipality;
+    const c = ad.workplace_address?.coordinates;
+    if (!name || c?.length !== 2 || c[0] == null) continue;
+    const s = (sums[name] ||= { lat: 0, lon: 0, n: 0 });
+    s.lat += c[1]; s.lon += c[0]; s.n++;
+  }
+  const out = { ...known };
+  for (const [name, s] of Object.entries(sums)) out[name] = { lat: s.lat / s.n, lon: s.lon / s.n };
+  return out;
+}
+
+// Annonsens position: egna koordinater i första hand, annars kommunens mittpunkt.
+export function adPosition(ad, centroids = {}) {
+  const c = ad.workplace_address?.coordinates;
+  if (c?.length === 2 && c[0] != null) return { lat: c[1], lon: c[0], approx: false };
+  const m = centroids[ad.workplace_address?.municipality];
+  return m ? { ...m, approx: true } : null;
+}
+
 // Slår upp en ort eller adress i Sverige via OpenStreetMap (Nominatim).
 export async function geocode(query) {
   const url = new URL(GEOCODE_API);

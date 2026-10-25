@@ -1,8 +1,9 @@
 // Lagring i webbläsaren samt export/import av dina data som fil.
 
 const PREFIX = 'jm.';
-// Nyckeln exporteras aldrig, och cachade register laddas om automatiskt.
-const EXPORT_EXCLUDE = new Set(['jm.apiKey', 'jm.taxonomy', 'jm.synonyms', 'jm.municipalities']);
+// Nycklar exporteras aldrig, och cachade register laddas om automatiskt.
+const EXPORT_EXCLUDE = new Set(['jm.apiKey', 'jm.transitKey', 'jm.taxonomy', 'jm.synonyms', 'jm.skills', 'jm.ssyk',
+  'jm.salaries', 'jm.municipalities', 'jm.muniCoords']);
 
 const defaultStorage = () => { try { return globalThis.localStorage ?? null; } catch { return null; } };
 

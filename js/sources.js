@@ -38,6 +38,19 @@ export function normalizeLinksAd(hit) {
 // hämtas redan med fullständig text via JobSearch.
 export const externalOnly = (hits) => hits.filter((h) => !(h.source_links || []).some(isAfLink)).map(normalizeLinksAd);
 
+// Annonser från andra jobbsajter, för sig. Används när Links-sökningen måste
+// göras efter Platsbanken-sökningen (t.ex. med län som tagits fram ur den).
+export async function fetchExternal({ linksPairs, days = 7, now = Date.now(), fetchImpl = fetch }) {
+  // Links anger bara datum, inte klockslag, så hela den första dagen räknas med.
+  const since = new Date(now - days * 86400000).toISOString().slice(0, 10) + 'T00:00:00';
+  const dayCutoff = new Date(now - days * 86400000); dayCutoff.setHours(0, 0, 0, 0);
+  const pages = await Promise.allSettled(Array.from({ length: LINKS_PAGES }, (_, p) =>
+    fetchJson(LINKS_API, [...linksPairs, ['published-after', since], ['sort', 'pubdate-desc'], ['limit', 100], ['offset', p * 100]], fetchImpl)));
+  return pages.filter((r) => r.status === 'fulfilled')
+    .flatMap((r) => externalOnly(r.value.hits))
+    .filter((ad) => new Date(ad.publication_date) >= dayCutoff);
+}
+
 export async function searchAds({ pairs, linksPairs = null, queryTerms = [], days = 7, now = Date.now(), fetchImpl = fetch }) {
   const sort = ['sort', 'pubdate-desc'];
   const jobsearch = [];
@@ -48,34 +61,20 @@ export async function searchAds({ pairs, linksPairs = null, queryTerms = [], day
   // fler annonser än vi hämtar.
   queryTerms.forEach((q) => jobsearch.push(fetchJson(SEARCH_API, [...pairs, ['published-after', days * 24 * 60], ['q', q], sort, ['limit', 100]], fetchImpl)));
 
-  const links = [];
-  if (linksPairs) {
-    // Links anger bara datum, inte klockslag, så hela den första dagen räknas med.
-    const since = new Date(now - days * 86400000).toISOString().slice(0, 10) + 'T00:00:00';
-    for (let p = 0; p < LINKS_PAGES; p++) {
-      links.push(fetchJson(LINKS_API, [...linksPairs, ['published-after', since], sort, ['limit', 100], ['offset', p * 100]], fetchImpl));
-    }
-  }
-
-  const [js, lk] = await Promise.all([Promise.allSettled(jobsearch), Promise.allSettled(links)]);
+  const [js, external] = await Promise.all([
+    Promise.allSettled(jobsearch),
+    linksPairs ? fetchExternal({ linksPairs, days, now, fetchImpl }) : [],
+  ]);
   const ok = js.filter((r) => r.status === 'fulfilled').map((r) => r.value);
   if (!ok.length) throw js[0].reason;
 
   const cutoff = now - days * 86400000;
-  const dayCutoff = new Date(cutoff); dayCutoff.setHours(0, 0, 0, 0);
   const byId = new Map();
   ok.forEach((r) => r.hits.forEach((ad) => {
     if (!byId.has(ad.id) && new Date(ad.publication_date).getTime() >= cutoff) byId.set(ad.id, ad);
   }));
-  lk.filter((r) => r.status === 'fulfilled').forEach((r) => externalOnly(r.value.hits).forEach((ad) => {
-    if (!byId.has(ad.id) && new Date(ad.publication_date) >= dayCutoff) byId.set(ad.id, ad);
-  }));
+  external.forEach((ad) => { if (!byId.has(ad.id)) byId.set(ad.id, ad); });
 
   const ads = dedupe([...byId.values()]);
-  return {
-    ads,
-    total: ok[0].total?.value ?? 0,
-    external: ads.filter((a) => a._source).length,
-    linksFailed: lk.some((r) => r.status === 'rejected'),
-  };
+  return { ads, total: ok[0].total?.value ?? 0, external: ads.filter((a) => a._source).length };
 }

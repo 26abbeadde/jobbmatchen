@@ -41,13 +41,18 @@ export async function loadMunicipalities(store, regionId) {
   return all[regionId];
 }
 
-// Kompetenser som har flera namn, t.ex. "Artificial Intelligence/Artificiell intelligens/AI".
-export const loadSynonymGroups = (store) => cached(store, 'jm.synonyms', 7 * DAY, async () => {
+// Alla kompetenser i registret, var och en med sina namn. De som har flera
+// namn används som synonymer, t.ex. "Artificial Intelligence/Artificiell intelligens/AI".
+export const loadSkillGroups = (store) => cached(store, 'jm.skills', 7 * DAY, async () => {
+  store.remove('jm.synonyms');   // ersatt av den här listan
   const d = await graphql('{concepts(type:"skill"){preferred_label alternative_labels}}');
-  const groups = [];
-  for (const c of d.concepts) {
-    const labels = [...new Set([...cleanLabel(c.preferred_label), ...(c.alternative_labels || []).flatMap(cleanLabel)].map(lc))];
-    if (labels.length > 1) groups.push(labels);
-  }
-  return groups;
+  return d.concepts
+    .map((c) => [...new Set([...cleanLabel(c.preferred_label), ...(c.alternative_labels || []).flatMap(cleanLabel)].map(lc))])
+    .filter((labels) => labels.length);
+});
+
+// Yrkesgruppernas SSYK-koder, som SCB:s lönestatistik använder.
+export const loadSsykCodes = (store) => cached(store, 'jm.ssyk', 30 * DAY, async () => {
+  const d = await graphql('{concepts(type:"ssyk-level-4"){id ssyk_code_2012}}');
+  return Object.fromEntries(d.concepts.map((c) => [c.id, c.ssyk_code_2012]));
 });

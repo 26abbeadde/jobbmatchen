@@ -62,7 +62,7 @@ export function dedupe(list) {
     const key = lc(norm(ad.headline || '')) + '|' + lc(ad.employer?.name);
     const place = ad.workplace_address?.municipality;
     const g = groups.get(key);
-    if (!g) { ad._places = place ? [place] : []; groups.set(key, ad); continue; }
+    if (!g) { ad._places = ad._places?.length ? ad._places : place ? [place] : []; groups.set(key, ad); continue; }
     if (place && !g._places.includes(place)) g._places.push(place);
   }
   return [...groups.values()];

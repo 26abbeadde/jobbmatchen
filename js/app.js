@@ -2,14 +2,17 @@
 
 import { DAYS, MAX_TERM_QUERIES, PAGE_SIZE, WATCH_INTERVAL, DEADLINE_SOON_DAYS } from './config.js';
 import { escapeHtml, lc, norm, termRegex, relativeDate, daysUntil, snippet, distanceKm } from './text.js';
-import { setSynonymGroups, buildTerms, scoreAd, extractCvTerms, adText, matchesAny } from './matching.js';
+import { setSynonymGroups, buildTerms, scoreAd, extractCvTerms, adText, matchesAny, dedupe } from './matching.js';
 import { buildProfile, learnedBoost, adFeatures } from './learning.js';
 import { STATUSES, statusLabel, migrateLegacy, setStatus, update, dueSoon, daysLeftText } from './tracker.js';
 import { createStore, exportData, importData } from './store.js';
-import { searchAds } from './sources.js';
-import { loadFieldsAndRegions, loadMunicipalities, loadSynonymGroups } from './taxonomy.js';
+import { searchAds, fetchExternal } from './sources.js';
+import { loadFieldsAndRegions, loadMunicipalities, loadSkillGroups, loadSsykCodes } from './taxonomy.js';
 import { readCv } from './cv.js';
-import { currentPosition, geocode } from './geo.js';
+import { currentPosition, geocode, municipalityCentroids, adPosition } from './geo.js';
+import { buildVocabulary, skillDemand } from './skills.js';
+import { fetchSalaries, salaryFor, kr } from './salary.js';
+import { travelMinutes, travelKey, formatMinutes } from './transit.js';
 import * as ai from './ai.js';
 
 const store = createStore();
@@ -27,6 +30,10 @@ let shown = PAGE_SIZE;
 let currentTerms = [];
 let watchTimer = null;
 let fields = [];
+let visible = [];                 // annonserna som visas just nu, för restid i klump
+let vocab = buildVocabulary();    // kompletteras med kompetensregistret när det laddats
+let salaries = null;
+let conceptToSsyk = {};
 
 // ---------- Sparat på den här datorn ----------
 const tracker = store.get('jm.tracker', null) ?? migrateLegacy(store.get('jm.saved', {}), store.get('jm.applied', {}));
@@ -39,6 +46,8 @@ for (const [id, t] of Object.entries(seen)) if (Date.now() - t > 30 * 86400000) 
 const seenAtStart = new Set(Object.keys(seen));         // "ny" = inte visad före det här besöket
 const isNew = (ad) => seenAtStart.size > 0 && !seenAtStart.has(ad.id);
 let home = store.get('jm.home', null);
+let centroids = store.get('jm.muniCoords', {});         // kommun -> ungefärlig mittpunkt
+const travel = store.get('jm.travel', {});              // hemort>arbetsplats -> minuter
 
 // ---------- Chip-fält ----------
 function chipInput(boxId, inputId, cls, storeKey, onChange) {
@@ -70,7 +79,7 @@ function chipInput(boxId, inputId, cls, storeKey, onChange) {
   input.addEventListener('blur', () => { if (input.value.trim()) add(input.value); });
   box.addEventListener('click', () => input.focus());
   render();
-  return { get: () => { if (input.value.trim()) add(input.value); return [...items]; } };
+  return { add, get: () => { if (input.value.trim()) add(input.value); return [...items]; } };
 }
 
 const keywords = chipInput('kwBox', 'kwInput', 'kw', 'jm.keywords', () => rerank());
@@ -159,6 +168,7 @@ async function setHome(getter) {
   try {
     home = await getter();
     store.set('jm.home', home);
+    renderTransitKeyStatus();
     if (!$('radius').value) $('radius').value = '30';
     store.set('jm.radius', $('radius').value);
     renderHome();
@@ -231,14 +241,15 @@ function searchPairs() {
   const placePairs = $('municipality').value ? [['municipality', $('municipality').value]]
     : $('region').value ? [['region', $('region').value]] : [];
   if (distanceActive()) {
-    // Links kan inte söka på avstånd och dess annonser saknar koordinater,
-    // så de tas bara med när inget maxavstånd är valt.
+    // Links kan inte söka på avstånd. Den sökningen görs i stället efteråt, i de
+    // län där Platsbanken hittade jobb inom avståndet.
     return {
       pairs: [...rolePairs, ['position', `${home.lat.toFixed(4)},${home.lon.toFixed(4)}`], ['position.radius', $('radius').value]],
       linksPairs: null,
+      rolePairs,
     };
   }
-  return { pairs: [...rolePairs, ...placePairs], linksPairs: $('includeLinks').checked ? [...rolePairs, ...placePairs] : null };
+  return { pairs: [...rolePairs, ...placePairs], linksPairs: $('includeLinks').checked ? [...rolePairs, ...placePairs] : null, rolePairs };
 }
 
 async function search({ silent = false, fromWatch = false } = {}) {
@@ -251,7 +262,7 @@ async function search({ silent = false, fromWatch = false } = {}) {
     $('filters').hidden = true;
     setView('results');
   }
-  const { pairs, linksPairs } = searchPairs();
+  const { pairs, linksPairs, rolePairs } = searchPairs();
   const queryTerms = [...new Set([...keywords.get(), ...tools.get(), ...cvTerms].map(lc))].slice(0, MAX_TERM_QUERIES);
 
   try {
@@ -259,7 +270,16 @@ async function search({ silent = false, fromWatch = false } = {}) {
     const result = await searchAds({ pairs, linksPairs, queryTerms, days: DAYS });
     ads = result.ads;
     totalAvailable = result.total;
-    externalCount = result.external;
+    if (distanceActive() && $('includeLinks').checked) {
+      const regions = [...new Set(ads.map((a) => a.workplace_address?.region_concept_id).filter(Boolean))];
+      if (regions.length) {
+        const extra = await fetchExternal({ linksPairs: [...rolePairs, ...regions.map((r) => ['region', r])], days: DAYS }).catch(() => []);
+        ads = dedupe([...ads, ...extra]);
+      }
+    }
+    externalCount = ads.filter((a) => a._source).length;
+    centroids = municipalityCentroids(ads, centroids);
+    store.set('jm.muniCoords', centroids);
     searchedOnce = true;
 
     cvTerms = extractCvTerms(cvText, ads, removedCvTerms);
@@ -293,8 +313,9 @@ function computeScores() {
   for (const ad of [...ads, ...trackedAds()]) {
     ad._score = scoreAd(ad, currentTerms);
     ad._boost = profile ? learnedBoost(ad, profile) : 0;
-    const c = ad.workplace_address?.coordinates;
-    ad._dist = home && c?.length === 2 && c[0] != null ? distanceKm(home, { lat: c[1], lon: c[0] }) : null;
+    ad._pos = adPosition(ad, centroids);
+    ad._dist = home && ad._pos ? distanceKm(home, ad._pos) : null;
+    ad._salary = salaryFor(ad, salaries, conceptToSsyk);
   }
 }
 
@@ -366,6 +387,7 @@ function renderResults() {
   $('onlyMatchWrap').style.display = hasTerms ? '' : 'none';
 
   if (view === 'tracker') { renderTracker(hasTerms); return; }
+  if (view === 'skills') { renderSkills(); return; }
   if (!searchedOnce) return;
   if (!ads.length) {
     $('filters').hidden = true;
@@ -373,11 +395,15 @@ function renderResults() {
     return;
   }
 
-  const byMatch = $('sort').value === 'match';
+  const sort = $('sort').value;
   const rank = (ad) => (ad._score?.pct ?? 0) + (ad._boost || 0);
-  const list = ads.filter(passesFilters).sort((a, b) => (byMatch ? rank(b) - rank(a) : 0) || b.publication_date.localeCompare(a.publication_date));
+  const dist = (ad) => ad._dist ?? Infinity;
+  const primary = { match: (a, b) => rank(b) - rank(a), distance: (a, b) => dist(a) - dist(b) }[sort];
+  const list = ads.filter(passesFilters).sort((a, b) => (primary?.(a, b) || 0) || b.publication_date.localeCompare(a.publication_date));
+  visible = list.slice(0, shown);
 
   $('filters').hidden = false;
+  $('transitAll').hidden = !(home && store.get('jm.transitKey', ''));
   const filteredOut = ads.length - list.length;
   const notes = [
     externalCount && `${externalCount} från andra jobbsajter`,
@@ -412,6 +438,57 @@ function renderTracker(hasTerms) {
   }).join('');
 }
 
+// Kompetenser som efterfrågas i annonserna (efter dina filter) och lönenivån i yrkena.
+function renderSkills() {
+  $('filters').hidden = true;
+  if (!searchedOnce || !ads.length) {
+    $('results').innerHTML = '<div class="status">Gör en sökning först. Här visas sedan vilka kompetenser som efterfrågas mest i annonserna och vad yrkena brukar ge i lön.</div>';
+    return;
+  }
+  const list = ads.filter(passesFilters);
+  const demand = skillDemand(list, vocab, currentTerms.flatMap((t) => t.variants)).filter((d) => d.count >= 2).slice(0, 30);
+  const top20 = demand.slice(0, 20);
+  const missing = demand.filter((d) => !d.has).slice(0, 5).map((d) => d.name);
+
+  const groups = new Map();
+  for (const ad of list) {
+    const s = ad._salary;
+    if (!s) continue;
+    const g = groups.get(s.ssyk) || { ...s, count: 0 };
+    g.count++;
+    groups.set(s.ssyk, g);
+  }
+  const topGroups = [...groups.values()].sort((a, b) => b.count - a.count).slice(0, 6);
+  const withOwnSalary = list.filter((a) => a.salary_description).length;
+
+  const salaryHtml = topGroups.length ? `
+    <table class="stats">
+      <thead><tr><th>Yrke</th><th>Medianlön</th><th>Spann (10–90 %)</th><th>Annonser</th></tr></thead>
+      <tbody>${topGroups.map((g) => `<tr><td>${escapeHtml(g.occupation)}</td><td><strong>${kr(g.median)}</strong></td><td>${g.p10 && g.p90 ? `${kr(g.p10)} – ${kr(g.p90)}` : '–'}</td><td>${g.count}</td></tr>`).join('')}</tbody>
+    </table>
+    <p class="hint">Månadslön före skatt enligt SCB:s lönestrukturstatistik ${escapeHtml(salaries.year)}, alla sektorer. 10 % av de anställda tjänar under spannet och 10 % över. ${withOwnSalary} av ${list.length} annonser anger själva lön.</p>`
+    : `<p class="hint">${salaries ? 'Ingen lönestatistik finns för yrkena i de här annonserna.' : 'Lönestatistiken laddas…'}</p>`;
+
+  const maxShare = Math.max(...demand.map((d) => d.share), 0.01);
+  const skillsHtml = demand.length ? `
+    <p>${currentTerms.length
+      ? `Du har <strong>${top20.filter((d) => d.has).length} av de ${top20.length}</strong> mest efterfrågade kompetenserna.${missing.length ? ` Vanligast av dem du inte angett: <strong>${missing.map(escapeHtml).join(', ')}</strong>.` : ''}`
+      : 'Lägg till verktyg eller ladda upp ditt CV för att se vilka av kompetenserna du redan har.'}</p>
+    <table class="stats">
+      <thead><tr><th>Kompetens</th><th>Andel annonser</th><th>Som krav</th><th></th></tr></thead>
+      <tbody>${demand.map((d) => `<tr>
+        <td>${escapeHtml(d.name)}</td>
+        <td><div class="sharebar"><span style="width:${Math.round((d.share / maxShare) * 100)}%"></span></div>${Math.round(d.share * 100)} %</td>
+        <td>${d.req ? `${d.req} st` : '–'}</td>
+        <td>${d.has ? '<span class="have">✓ Du har</span>' : `<button class="linkbtn" data-action="addtool" data-name="${escapeHtml(d.name)}">+ Jag kan detta</button>`}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+    <p class="hint">Räknat på ${list.length} annonser i din sökning, efter filter. "Som krav" = antal annonser där kompetensen nämns i kravdelen.</p>`
+    : '<p class="hint">Hittade inga kompetenser som nämns i flera annonser.</p>';
+
+  $('results').innerHTML = `<h3 class="group-title">Lönenivå i yrkena</h3>${salaryHtml}<h3 class="group-title">Mest efterfrågade kompetenser</h3>${skillsHtml}`;
+}
+
 function renderReminder() {
   const due = dueSoon(tracker, DEADLINE_SOON_DAYS);
   const el = $('reminder');
@@ -438,6 +515,26 @@ function highlight(text, terms) {
   return html;
 }
 
+// Restid visas om den redan räknats ut, annars som en knapp (om nyckel finns).
+function transitHtml(ad) {
+  if (!home || !ad._pos) return '';
+  const minutes = travel[travelKey(home, ad._pos)];
+  if (minutes != null) return `<span title="Kollektivtrafik, framme 08:00 en vardag">🚆 ${minutes ? formatMinutes(minutes) : 'ingen resa hittades'}</span>`;
+  if (!store.get('jm.transitKey', '')) return '';
+  return `<button class="linkbtn" data-action="transit" data-id="${escapeHtml(ad.id)}">🚆 Visa restid</button>`;
+}
+
+async function computeTravel(list) {
+  const apiKey = store.get('jm.transitKey', '');
+  for (const ad of list) {
+    if (!home || !ad._pos) continue;
+    const key = travelKey(home, ad._pos);
+    if (travel[key] !== undefined) continue;
+    travel[key] = (await travelMinutes(apiKey, home, ad._pos)) ?? 0;
+  }
+  store.set('jm.travel', travel);
+}
+
 const shortDate = (d) => new Date(d).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
 
 function jobCard(ad, hasTerms) {
@@ -462,6 +559,7 @@ function jobCard(ad, hasTerms) {
     daysLeft !== null && daysLeft >= 0 && daysLeft <= DEADLINE_SOON_DAYS && `<span class="badge urgent">⏰ Sista dag ${daysLeftText(daysLeft)}</span>`,
     daysLeft !== null && daysLeft < 0 && '<span class="badge urgent">Ansökningstiden har gått ut</span>',
     ad.salary_description && `<span class="badge salary">💰 ${escapeHtml(ad.salary_description.slice(0, 80))}</span>`,
+    ad._salary && `<span class="badge" title="Medianlön för ${escapeHtml(ad._salary.occupation)} enligt SCB ${escapeHtml(ad._salary.year)}${ad._salary.p10 ? `. 10 % tjänar under ${kr(ad._salary.p10)} och 10 % över ${kr(ad._salary.p90)}` : ''}.">📊 Yrkets medianlön ${kr(ad._salary.median)}</span>`,
     ad.workplace_model?.label && ad.workplace_model.label !== 'Arbete på plats' && `<span class="badge">${escapeHtml(ad.workplace_model.label)}</span>`,
     ad.driving_license_required && '<span class="badge">🚗 Körkort krävs</span>',
     ad.experience_required === false && '<span class="badge">Ingen erfarenhet krävs</span>',
@@ -509,7 +607,8 @@ function jobCard(ad, hasTerms) {
           <div class="meta">
             <span class="${when.fresh ? 'fresh' : ''}">🕒 ${when.text}</span>
             <span title="${escapeHtml(places.join(', '))}">📍 ${escapeHtml(place)}</span>
-            ${ad._dist != null ? `<span title="Fågelvägen från din hemort">🚗 ${Math.round(ad._dist)} km</span>` : ''}
+            ${ad._dist != null ? `<span title="Fågelvägen från din hemort${ad._pos.approx ? ', ungefärligt (kommunens mitt)' : ''}">🚗 ${ad._pos.approx ? '≈ ' : ''}${Math.round(ad._dist)} km</span>` : ''}
+            ${transitHtml(ad)}
             ${ad.occupation?.label ? `<span>💼 ${escapeHtml(ad.occupation.label)}</span>` : ''}
             ${ad.working_hours_type?.label ? `<span>${escapeHtml(ad.working_hours_type.label)}</span>` : ''}
             ${ad.employment_type?.label ? `<span>${escapeHtml(ad.employment_type.label.replace(/\s*\(.*\)/, ''))}</span>` : ''}
@@ -567,6 +666,12 @@ $('results').addEventListener('click', (e) => {
       break;
     case 'copy':
       navigator.clipboard?.writeText(tracker[id]?.letter || '').then(() => { btn.textContent = '✓ Kopierat'; });
+      return;
+    case 'addtool':
+      tools.add(btn.dataset.name); return;
+    case 'transit':
+      btn.textContent = '🚆 Räknar…';
+      computeTravel([ad]).then(renderResults).catch((err) => { btn.textContent = '🚆 ' + err.message; });
       return;
     case 'ai-analyze': runAi('analyze', ad); return;
     case 'ai-letter': runAi('letter', ad); return;
@@ -661,6 +766,49 @@ $('saveKey').addEventListener('click', () => {
 });
 $('clearKey').addEventListener('click', () => { store.remove('jm.apiKey'); renderKeyStatus(); });
 
+// ---------- Restid ----------
+function renderTransitKeyStatus() {
+  const key = store.get('jm.transitKey', '');
+  $('transitKeyStatus').textContent = key
+    ? `✓ Nyckel sparad (…${key.slice(-4)}).${home ? '' : ' Ange din hemort under Pendlingsavstånd för att se restider.'}`
+    : 'Ingen nyckel sparad.';
+}
+$('saveTransitKey').addEventListener('click', () => {
+  const key = $('transitKey').value.trim();
+  if (!key) return;
+  store.set('jm.transitKey', key);
+  $('transitKey').value = '';
+  renderTransitKeyStatus();
+  rerank();
+});
+$('clearTransitKey').addEventListener('click', () => { store.remove('jm.transitKey'); renderTransitKeyStatus(); rerank(); });
+$('transitAll').addEventListener('click', async () => {
+  const btn = $('transitAll');
+  btn.disabled = true;
+  btn.textContent = `🚆 Räknar restid för ${visible.length} annonser…`;
+  try {
+    await computeTravel(visible);
+    btn.textContent = '🚆 Restid för visade annonser';
+  } catch (err) {
+    btn.textContent = '🚆 ' + err.message;
+  } finally {
+    btn.disabled = false;
+    renderResults();
+  }
+});
+
+// ---------- Lönestatistik ----------
+async function loadSalaryData() {
+  const cached = store.get('jm.salaries', null);
+  salaries = cached?.data && Date.now() - cached.at < 30 * 86400000 ? cached.data : null;
+  conceptToSsyk = await loadSsykCodes(store);
+  if (!salaries) {
+    salaries = await fetchSalaries();
+    store.set('jm.salaries', { at: Date.now(), data: salaries });
+  }
+  rerank();
+}
+
 // ---------- Export och import ----------
 $('exportBtn').addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(exportData(localStorage), null, 2)], { type: 'application/json' });
@@ -732,11 +880,13 @@ loadFilters();
 renderRoles();
 renderHome();
 renderKeyStatus();
+renderTransitKeyStatus();
 renderResults();
 notifyReminder();
-loadSynonymGroups(store)
-  .then((groups) => { setSynonymGroups(groups); rerank(); })
-  .catch((err) => console.warn('Synonymer kunde inte laddas', err));
+loadSkillGroups(store)
+  .then((groups) => { setSynonymGroups(groups.filter((g) => g.length > 1)); vocab = buildVocabulary(groups); rerank(); })
+  .catch((err) => console.warn('Kompetensregistret kunde inte laddas', err));
+loadSalaryData().catch((err) => console.warn('Lönestatistiken kunde inte laddas', err));
 initTaxonomy()
   .then(() => {
     renderHome();

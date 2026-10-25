@@ -96,6 +96,18 @@
       <p id="keyStatus"></p>
     </details>
 
+    <details class="settings" id="transitSettings">
+      <summary>🚆 Restid med kollektivtrafik (valfritt)</summary>
+      <p>Med en gratis API-nyckel från <a href="https://www.trafiklab.se/api/our-apis/resrobot-v21/" target="_blank" rel="noopener">Trafiklab (ResRobot v2.1)</a> kan appen visa restiden med kollektivtrafik från din hemort till jobbet, räknat på att vara framme 08:00 en vardag.</p>
+      <p>Nyckeln sparas bara i den här webbläsaren. Din hemort och arbetsplatsens position skickas till Trafiklab när du ber om en restid.</p>
+      <input type="password" id="transitKey" placeholder="Trafiklab-nyckel" autocomplete="off">
+      <div class="inline" style="margin-top:8px">
+        <button class="secondary" id="saveTransitKey" type="button">Spara nyckel</button>
+        <button class="secondary" id="clearTransitKey" type="button">Ta bort</button>
+      </div>
+      <p id="transitKeyStatus"></p>
+    </details>
+
     <details class="settings">
       <summary>💾 Dina data</summary>
       <p>Sparade annonser, ansökningar och inställningar finns bara i den här webbläsaren. Exportera dem till en fil och importera filen på en annan dator eller i mobilen. API-nyckeln följer inte med.</p>
@@ -114,6 +126,7 @@
     <div class="tabs" role="tablist">
       <button data-view="results" class="active" role="tab">Sökresultat</button>
       <button data-view="tracker" role="tab">Mina ansökningar (<span id="trackerCount">0</span>)</button>
+      <button data-view="skills" role="tab">Kompetenser &amp; lön</button>
     </div>
     <div id="reminder" class="banner warn" hidden></div>
     <div id="banner" class="banner" hidden></div>
@@ -122,6 +135,7 @@
         <select id="sort">
           <option value="date">Nyast först</option>
           <option value="match">Bäst matchning</option>
+          <option value="distance">Närmast hemma</option>
         </select>
       </label>
       <label>Arbetsplats
@@ -150,6 +164,7 @@
       <label><input type="checkbox" id="onlyNew"> Bara nya sedan förra besöket</label>
       <label><input type="checkbox" id="showHidden"> Visa dolda</label>
       <label title="Annonser som liknar dem du sparat eller sökt hamnar högre, och sådana som liknar dem du dolt hamnar lägre, när du sorterar på bäst matchning."><input type="checkbox" id="learn" checked> Lär av mina val</label>
+      <button class="secondary" id="transitAll" type="button" hidden>🚆 Restid för visade annonser</button>
     </div>
     <div id="results">
       <div class="status">Välj bransch och roll, lägg till nyckelord och verktyg och tryck <strong>Sök jobb</strong>.</div>
