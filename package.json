@@ -1,0 +1,10 @@
+{
+  "name": "jobbmatchen",
+  "private": true,
+  "type": "module",
+  "description": "Hitta jobbannonser från Platsbanken som matchar dig",
+  "scripts": {
+    "start": "python -m http.server 8765",
+    "test": "node --test \"tests/*.test.js\""
+  }
+}
