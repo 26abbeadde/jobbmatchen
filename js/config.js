@@ -15,7 +15,8 @@ export const AI_MODEL = 'claude-opus-5-5';
 export const DAYS = 7;
 export const BASE_PAGES = 3;              // 3 x 100 senaste annonserna för valda roller
 export const LINKS_PAGES = 2;             // annonser från andra jobbsajter
-export const MAX_TERM_QUERIES = 10;       // extra fritextsökningar per nyckelord/verktyg
+export const MAX_TERM_QUERIES = 10;       // fritextsökningar på verktyg när nyckelord saknas
+export const MAX_KEYWORD_REQUESTS = 14;   // förfrågningar för nyckelord och deras synonymer
 export const PAGE_SIZE = 25;              // annonser som visas åt gången
 export const WATCH_INTERVAL = 30 * 60 * 1000;
 export const DEADLINE_SOON_DAYS = 3;
@@ -24,7 +25,9 @@ export const DEADLINE_SOON_DAYS = 3;
 // annonsens kravdel väger extra.
 export const WEIGHT = { kw: 3, tool: 3, cv: 1 };
 export const HEADLINE_BOOST = 1.5;
+export const OCCUPATION_BOOST = 1.3;     // träff i yrket arbetsgivaren valt, men inte i rubriken
 export const REQUIREMENT_BOOST = 1.3;
+export const KEYWORD_TEXT_WEIGHT = 0.5;  // nyckelord som bara nämns i brödtexten
 export const CV_TERM_CAP = 8;
 
 // Vanliga verktyg, system och kompetenser som letas upp i CV:t. Ord som börjar
@@ -86,7 +89,7 @@ export const SYNONYM_GROUPS = [
   ['ai', 'artificiell intelligens', 'artificial intelligence'], ['machine learning', 'maskininlärning'],
   ['frontend', 'front-end', 'front end'], ['backend', 'back-end', 'back end'], ['fullstack', 'full-stack', 'full stack'],
   ['ux', 'användarupplevelse', 'user experience'],
-  ['it-support', 'helpdesk', 'servicedesk', 'service desk', 'it support'],
+  ['it-support', 'it support', 'helpdesk', 'servicedesk', 'service desk', 'supporttekniker', 'first line', 'second line', 'användarsupport'],
   ['kundservice', 'kundtjänst', 'customer service', 'kundsupport'],
   ['projektledning', 'projektledare', 'project management', 'project manager'],
   ['b-körkort', 'körkort b', 'b-kort', 'körkort'], ['c-körkort', 'körkort c'], ['ce-körkort', 'körkort ce'],

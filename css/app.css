@@ -213,6 +213,11 @@ details.settings p { font-size: .85rem; color: var(--muted); }
 .tag.cv { background: var(--chip); }
 .tag small { color: var(--muted); }
 .tag.req { box-shadow: inset 0 0 0 1px var(--good); }
+.tag.title { box-shadow: inset 0 0 0 1px var(--accent); font-weight: 600; }
+.tag.occupation { box-shadow: inset 0 0 0 1px var(--accent); }
+.banner.suggest { background: var(--accent-weak); border-color: var(--accent); }
+.banner.suggest .chips { margin: 8px 0 6px; }
+.banner.suggest .secondary { padding: 4px 10px; font-size: .88rem; }
 .tag.miss { background: transparent; border: 1px dashed var(--border); color: var(--muted); text-decoration: line-through; }
 .tag.lack { background: var(--warn-weak); color: var(--warn); }
 

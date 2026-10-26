@@ -1,6 +1,6 @@
 // Hämtar annonser: Platsbanken (JobSearch) och andra jobbsajter (JobTech Links).
 
-import { SEARCH_API, LINKS_API, BASE_PAGES, LINKS_PAGES } from './config.js';
+import { SEARCH_API, LINKS_API, LINKS_PAGES } from './config.js';
 import { dedupe } from './matching.js';
 
 export async function fetchJson(base, pairs, fetchImpl = fetch) {
@@ -38,35 +38,47 @@ export function normalizeLinksAd(hit) {
 // hämtas redan med fullständig text via JobSearch.
 export const externalOnly = (hits) => hits.filter((h) => !(h.source_links || []).some(isAfLink)).map(normalizeLinksAd);
 
-// Annonser från andra jobbsajter, för sig. Används när Links-sökningen måste
-// göras efter Platsbanken-sökningen (t.ex. med län som tagits fram ur den).
-export async function fetchExternal({ linksPairs, days = 7, now = Date.now(), fetchImpl = fetch }) {
+// Fraser med flera ord skickas inom citattecken. Annars söker tjänsten på varje
+// ord för sig: "it support" blir it ELLER support, med tusentals träffar som
+// "Project Support" och "HR-support".
+export const asQuery = (term) => (/[\s-]/.test(term.trim()) ? `"${term.trim()}"` : term.trim());
+
+// Annonser från andra jobbsajter, för sig. Används också när Links-sökningen
+// måste göras efter Platsbanken-sökningen (t.ex. med län som tagits fram ur den).
+// Med sökord hämtas de mest relevanta per sökord, annars de senaste.
+export async function fetchExternal({ linksPairs, queries = [], days = 7, now = Date.now(), fetchImpl = fetch }) {
   // Links anger bara datum, inte klockslag, så hela den första dagen räknas med.
   const since = new Date(now - days * 86400000).toISOString().slice(0, 10) + 'T00:00:00';
   const dayCutoff = new Date(now - days * 86400000); dayCutoff.setHours(0, 0, 0, 0);
-  const pages = await Promise.allSettled(Array.from({ length: LINKS_PAGES }, (_, p) =>
-    fetchJson(LINKS_API, [...linksPairs, ['published-after', since], ['sort', 'pubdate-desc'], ['limit', 100], ['offset', p * 100]], fetchImpl)));
+  const base = [...linksPairs, ['published-after', since], ['limit', 100]];
+  const requests = queries.length
+    ? queries.map((q) => fetchJson(LINKS_API, [...base, ['q', asQuery(q)]], fetchImpl))
+    : Array.from({ length: LINKS_PAGES }, (_, p) => fetchJson(LINKS_API, [...base, ['sort', 'pubdate-desc'], ['offset', p * 100]], fetchImpl));
+  const pages = await Promise.allSettled(requests);
   return pages.filter((r) => r.status === 'fulfilled')
     .flatMap((r) => externalOnly(r.value.hits))
     .filter((ad) => new Date(ad.publication_date) >= dayCutoff);
 }
 
-export async function searchAds({ pairs, linksPairs = null, queryTerms = [], days = 7, now = Date.now(), fetchImpl = fetch }) {
-  const sort = ['sort', 'pubdate-desc'];
+// requests: [{ pairs, q?, pages }]. Utan sökord hämtas de senaste annonserna
+// inom filtret; med sökord sorteras träffarna på relevans, så att de annonser
+// som passar sökordet bäst kommer med även när det finns hundratals.
+export async function searchAds({ requests, linksPairs = null, linksQueries = [], days = 7, now = Date.now(), fetchImpl = fetch }) {
+  const since = ['published-after', days * 24 * 60];
   const jobsearch = [];
-  for (let p = 0; p < BASE_PAGES; p++) {
-    jobsearch.push(fetchJson(SEARCH_API, [...pairs, ['published-after', days * 24 * 60], sort, ['limit', 100], ['offset', p * 100]], fetchImpl));
+  for (const { pairs, q, pages = 1 } of requests) {
+    const order = q ? ['q', asQuery(q)] : ['sort', 'pubdate-desc'];
+    for (let p = 0; p < pages; p++) {
+      jobsearch.push(fetchJson(SEARCH_API, [...pairs, since, order, ['limit', 100], ['offset', p * 100]], fetchImpl));
+    }
   }
-  // Riktade sökningar per nyckelord, så att träffar inte missas när det finns
-  // fler annonser än vi hämtar.
-  queryTerms.forEach((q) => jobsearch.push(fetchJson(SEARCH_API, [...pairs, ['published-after', days * 24 * 60], ['q', q], sort, ['limit', 100]], fetchImpl)));
 
   const [js, external] = await Promise.all([
     Promise.allSettled(jobsearch),
-    linksPairs ? fetchExternal({ linksPairs, days, now, fetchImpl }) : [],
+    linksPairs ? fetchExternal({ linksPairs, queries: linksQueries, days, now, fetchImpl }) : [],
   ]);
   const ok = js.filter((r) => r.status === 'fulfilled').map((r) => r.value);
-  if (!ok.length) throw js[0].reason;
+  if (jobsearch.length && !ok.length) throw js[0].reason;
 
   const cutoff = now - days * 86400000;
   const byId = new Map();
@@ -76,5 +88,5 @@ export async function searchAds({ pairs, linksPairs = null, queryTerms = [], day
   external.forEach((ad) => { if (!byId.has(ad.id)) byId.set(ad.id, ad); });
 
   const ads = dedupe([...byId.values()]);
-  return { ads, total: ok[0].total?.value ?? 0, external: ads.filter((a) => a._source).length };
+  return { ads, total: ok[0]?.total?.value ?? 0, external: ads.filter((a) => a._source).length };
 }

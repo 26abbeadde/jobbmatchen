@@ -10,7 +10,8 @@ Hittar jobbannonser som publicerats de senaste 7 dagarna och visar hur väl de m
 - **Pendlingsavstånd**: ange din ort eller använd din position och visa bara jobb inom t.ex. 30 km. Annonser som bara anger kommun får ett ungefärligt avstånd. Med en egen Trafiklab-nyckel visas även restid med kollektivtrafik.
 - **Kompetenser & lön**: vilka kompetenser som efterfrågas mest i annonserna och vilka du saknar, samt medianlön och lönespann per yrke från SCB.
 - **Fler källor**: annonser från Platsbanken plus andra jobbsajter via JobTech Links.
-- **Matchning**: nyckelord, verktyg och CV ger en procentsiffra per annons. Träffar i rubriken och kravdelen väger tyngre, synonymer räknas och krav du saknar visas.
+- **Träffsäker sökning**: nyckelorden (t.ex. "it support") söks som fraser och måste som standard finnas i annonsens rubrik eller yrke, inte bara nämnas i texten. Appen föreslår också vilka yrken (Arbetsförmedlingens yrkesbenämningar) annonserna oftast är klassade som, så att du kan söka på yrket direkt.
+- **Matchning**: nyckelord, verktyg och CV ger en procentsiffra per annons. Träffar i rubriken, yrket och kravdelen väger tyngre, synonymer räknas och krav du saknar visas.
 - **Lär av dina val**: annonser som liknar dem du sparat hamnar högre, och sådana som liknar dem du dolt hamnar lägre.
 - **Mina ansökningar**: följ annonser från Sparad till Sökt, Intervju och Erbjudande/Avslag, med anteckningar och påminnelse innan sista ansökningsdag.
 - **AI-hjälp (valfritt, egen API-nyckel)**: bedömning av hur väl du passar, utkast till personligt brev och tips för CV:t.

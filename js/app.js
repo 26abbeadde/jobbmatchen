@@ -1,8 +1,8 @@
 // Gränssnittet: kopplar ihop formuläret, sökningen, listorna och AI-hjälpen.
 
-import { DAYS, MAX_TERM_QUERIES, PAGE_SIZE, WATCH_INTERVAL, DEADLINE_SOON_DAYS } from './config.js';
+import { DAYS, BASE_PAGES, MAX_TERM_QUERIES, MAX_KEYWORD_REQUESTS, PAGE_SIZE, WATCH_INTERVAL, DEADLINE_SOON_DAYS } from './config.js';
 import { escapeHtml, lc, norm, termRegex, relativeDate, daysUntil, snippet, distanceKm } from './text.js';
-import { setSynonymGroups, buildTerms, scoreAd, extractCvTerms, adText, matchesAny, dedupe } from './matching.js';
+import { setSynonymGroups, variantsFor, buildTerms, scoreAd, extractCvTerms, adText, matchesAny, dedupe, occupationSuggestions } from './matching.js';
 import { buildProfile, learnedBoost, adFeatures } from './learning.js';
 import { STATUSES, statusLabel, migrateLegacy, setStatus, update, dueSoon, daysLeftText } from './tracker.js';
 import { createStore, exportData, importData } from './store.js';
@@ -24,7 +24,6 @@ let searchedOnce = false;
 let searching = false;
 let view = 'results';
 let ads = [];
-let totalAvailable = 0;
 let externalCount = 0;
 let shown = PAGE_SIZE;
 let currentTerms = [];
@@ -120,8 +119,11 @@ async function fillMunicipalities() {
 }
 
 // Valda roller: flera kan läggas till. Har inga lagts till används det som
-// står i listorna just nu.
+// står i listorna just nu. Typerna är bransch (field), yrkesgrupp (group) och
+// yrke (name, en exakt yrkesbenämning, t.ex. "Helpdesktekniker/Supporttekniker").
 const roles = store.get('jm.roles', []);
+const ROLE_PARAM = { field: 'occupation-field', group: 'occupation-group', name: 'occupation-name' };
+const nameRoleIds = () => new Set(activeRoles().filter((r) => r.type === 'name').map((r) => r.id));
 function currentSelection() {
   if ($('group').value) return { id: $('group').value, label: $('group').selectedOptions[0].text, type: 'group' };
   if ($('field').value) return { id: $('field').value, label: `${$('field').selectedOptions[0].text} (alla roller)`, type: 'field' };
@@ -236,20 +238,48 @@ $('cvFile').addEventListener('change', (e) => handleCv(e.target.files[0]));
 drop.addEventListener('drop', (e) => handleCv(e.dataTransfer.files[0]));
 
 // ---------- Sökning ----------
-function searchPairs() {
-  const rolePairs = activeRoles().map((r) => [r.type === 'field' ? 'occupation-field' : 'occupation-group', r.id]);
-  const placePairs = $('municipality').value ? [['municipality', $('municipality').value]]
-    : $('region').value ? [['region', $('region').value]] : [];
-  if (distanceActive()) {
-    // Links kan inte söka på avstånd. Den sökningen görs i stället efteråt, i de
-    // län där Platsbanken hittade jobb inom avståndet.
-    return {
-      pairs: [...rolePairs, ['position', `${home.lat.toFixed(4)},${home.lon.toFixed(4)}`], ['position.radius', $('radius').value]],
-      linksPairs: null,
-      rolePairs,
+// Nyckelorden styr sökningen: varje nyckelord och dess synonymer söks för sig,
+// som fras och sorterat på relevans. Valda branscher/yrkesgrupper avgränsar
+// området, och valda yrken (yrkesbenämningar) hämtas i sin helhet. De senaste
+// annonserna i hela Sverige, oavsett yrke, hämtas aldrig.
+function searchPlan() {
+  const roleList = activeRoles();
+  const areaPairs = roleList.filter((r) => r.type !== 'name').map((r) => [ROLE_PARAM[r.type], r.id]);
+  const namePairs = roleList.filter((r) => r.type === 'name').map((r) => [ROLE_PARAM.name, r.id]);
+  const placePairs = distanceActive()
+    ? [['position', `${home.lat.toFixed(4)},${home.lon.toFixed(4)}`], ['position.radius', $('radius').value]]
+    : $('municipality').value ? [['municipality', $('municipality').value]]
+      : $('region').value ? [['region', $('region').value]] : [];
+
+  const kw = keywords.get();
+  const queries = [];
+  if (kw.length) {
+    // Dina egna nyckelord får två sidor (200 träffar), synonymerna en sida var,
+    // så länge det ryms inom taket för antal förfrågningar.
+    const seenQ = new Set();
+    let budget = MAX_KEYWORD_REQUESTS;
+    const add = (q, pages) => {
+      if (seenQ.has(lc(q)) || pages > budget) return;
+      seenQ.add(lc(q)); budget -= pages; queries.push({ q, pages });
     };
+    kw.forEach((k) => add(k, 2));
+    kw.flatMap(variantsFor).forEach((v) => add(v, 1));
+  } else {
+    // Utan nyckelord: verktygen (eller CV:t) som sökord, inom valda roller.
+    (tools.get().length ? tools.get() : cvTerms).slice(0, MAX_TERM_QUERIES).forEach((q) => queries.push({ q, pages: 1 }));
   }
-  return { pairs: [...rolePairs, ...placePairs], linksPairs: $('includeLinks').checked ? [...rolePairs, ...placePairs] : null, rolePairs };
+
+  const requests = [];
+  if (areaPairs.length || (!queries.length && !namePairs.length)) requests.push({ pairs: [...areaPairs, ...placePairs], pages: BASE_PAGES });
+  if (namePairs.length) requests.push({ pairs: [...namePairs, ...placePairs], pages: 2 });
+  queries.forEach(({ q, pages }) => requests.push({ pairs: [...areaPairs, ...placePairs], q, pages }));
+
+  // Andra jobbsajter: inom valda branscher/yrkesgrupper, eller på nyckelorden.
+  // Links kan inte söka på avstånd; då görs sökningen efteråt (se search).
+  const linksQueries = areaPairs.length ? [] : (kw.length ? kw : tools.get()).slice(0, 4);
+  const linksPairs = $('includeLinks').checked && !distanceActive() && (areaPairs.length || linksQueries.length)
+    ? [...areaPairs, ...placePairs] : null;
+  return { requests, linksPairs, linksQueries, areaPairs };
 }
 
 async function search({ silent = false, fromWatch = false } = {}) {
@@ -262,18 +292,16 @@ async function search({ silent = false, fromWatch = false } = {}) {
     $('filters').hidden = true;
     setView('results');
   }
-  const { pairs, linksPairs, rolePairs } = searchPairs();
-  const queryTerms = [...new Set([...keywords.get(), ...tools.get(), ...cvTerms].map(lc))].slice(0, MAX_TERM_QUERIES);
+  const { requests, linksPairs, linksQueries, areaPairs } = searchPlan();
 
   try {
     const previousIds = new Set(ads.map((a) => a.id));
-    const result = await searchAds({ pairs, linksPairs, queryTerms, days: DAYS });
+    const result = await searchAds({ requests, linksPairs, linksQueries, days: DAYS });
     ads = result.ads;
-    totalAvailable = result.total;
-    if (distanceActive() && $('includeLinks').checked) {
+    if (distanceActive() && $('includeLinks').checked && (areaPairs.length || linksQueries.length)) {
       const regions = [...new Set(ads.map((a) => a.workplace_address?.region_concept_id).filter(Boolean))];
       if (regions.length) {
-        const extra = await fetchExternal({ linksPairs: [...rolePairs, ...regions.map((r) => ['region', r])], days: DAYS }).catch(() => []);
+        const extra = await fetchExternal({ linksPairs: [...areaPairs, ...regions.map((r) => ['region', r])], queries: linksQueries, days: DAYS }).catch(() => []);
         ads = dedupe([...ads, ...extra]);
       }
     }
@@ -326,7 +354,7 @@ function rerank() {
 }
 
 // ---------- Filter ----------
-const FILTER_IDS = ['sort', 'fWorkplace', 'fHours', 'fEmployment', 'onlyMatch', 'onlyNew', 'showHidden', 'learn', 'includeLinks'];
+const FILTER_IDS = ['kwScope', 'sort', 'fWorkplace', 'fHours', 'fEmployment', 'onlyMatch', 'onlyNew', 'showHidden', 'learn', 'includeLinks'];
 function loadFilters() {
   const f = store.get('jm.filters', {});
   FILTER_IDS.forEach((id) => {
@@ -345,7 +373,17 @@ function isRemote(ad) {
   return label === 'Distansarbete' || (!label && REMOTE_RE.test(adText(ad)));
 }
 
+// Nyckelorden måste finnas i rubriken/yrket eller någonstans i annonsen,
+// beroende på inställningen. Annonser vars yrke du själv valt räknas alltid med.
+function keywordOk(ad) {
+  const scope = $('kwScope').value;
+  if (scope === 'off' || !currentTerms.some((t) => t.type === 'kw')) return true;
+  if (ad.occupation?.concept_id && nameRoleIds().has(ad.occupation.concept_id)) return true;
+  return scope === 'title' ? !!ad._score?.kwTitle : !!ad._score?.kwAny;
+}
+
 function passesFilters(ad) {
+  if (!keywordOk(ad)) return false;
   if (hidden.has(ad.id) && !$('showHidden').checked) return false;
   if ($('onlyMatch').checked && currentTerms.length && !ad._score?.matched.length) return false;
   if ($('onlyNew').checked && !isNew(ad)) return false;
@@ -404,15 +442,17 @@ function renderResults() {
 
   $('filters').hidden = false;
   $('transitAll').hidden = !(home && store.get('jm.transitKey', ''));
-  const filteredOut = ads.length - list.length;
+  const kwMissing = ads.filter((a) => !keywordOk(a)).length;
+  const otherOut = ads.length - list.length - kwMissing;
   const notes = [
     externalCount && `${externalCount} från andra jobbsajter`,
-    filteredOut && `${filteredOut} bortfiltrerade`,
-    totalAvailable > ads.length && !activeRoles().length && 'välj bransch eller roll för att se fler',
+    kwMissing && `${kwMissing} utan nyckelorden i ${$('kwScope').value === 'title' ? 'rubrik eller yrke' : 'annonsen'}`,
+    otherOut && `${otherOut} bortfiltrerade`,
   ].filter(Boolean);
   $('results').innerHTML =
     `<p class="count">${list.length.toLocaleString('sv-SE')} annonser senaste ${DAYS} dagarna` +
     `<span class="sub">${notes.length ? ' · ' + notes.join(' · ') : ''}</span></p>` +
+    suggestionsHtml() +
     (list.length
       ? list.slice(0, shown).map((ad) => jobCard(ad, hasTerms)).join('') +
         (list.length > shown ? `<div class="more"><button class="secondary" data-action="more">Visa fler (${list.length - shown} kvar)</button></div>` : '')
@@ -436,6 +476,17 @@ function renderTracker(hasTerms) {
     if (!group.length) return '';
     return `<h3 class="group-title">${s.label} <span>${group.length}</span></h3>` + group.map((e) => jobCard(e.ad, hasTerms)).join('');
   }).join('');
+}
+
+// Förslag på yrken att söka på, utifrån hur annonserna med dina nyckelord i
+// rubriken är klassade. Ett valt yrke ger även annonser med andra rubriker.
+function suggestionsHtml() {
+  if ($('kwScope').value === 'off' || !currentTerms.some((t) => t.type === 'kw')) return '';
+  const list = occupationSuggestions(ads, nameRoleIds());
+  if (!list.length) return '';
+  return `<div class="banner suggest">💡 <strong>Sök på yrket, inte bara ordet:</strong> annonserna med dina nyckelord i rubriken är oftast klassade som
+    <div class="chips">${list.map((s) => `<button class="secondary" data-action="addname" data-id="${escapeHtml(s.id)}" data-label="${escapeHtml(s.label)}">+ ${escapeHtml(s.label)} <span class="hint">(${s.count})</span></button>`).join('')}</div>
+    <span class="hint">Lägg till ett yrke så kommer även annonser med samma yrke men andra rubriker med.</span></div>`;
 }
 
 // Kompetenser som efterfrågas i annonserna (efter dina filter) och lönenivån i yrkena.
@@ -575,9 +626,11 @@ function jobCard(ad, hasTerms) {
       <div class="bar"><span style="width:${s.pct}%;background:${color}"></span></div>
     </div>` : '';
   const typeLabel = { kw: 'Nyckelord', tool: 'Verktyg/system', cv: 'Från ditt CV' };
+  const whereLabel = { title: 'i rubriken', occupation: 'i yrket som arbetsgivaren valt', req: 'står bland kraven', text: 'nämns bara i texten' };
+  const whereShort = { title: 'rubrik', occupation: 'yrke', req: 'krav' };
   const tags = hasTerms ? `
     <div class="matched">
-      ${s.matched.map((t) => `<span class="tag ${t.type === 'cv' ? 'cv' : ''} ${t.req ? 'req' : ''}" title="${typeLabel[t.type]}${t.req ? ' · står bland kraven' : ''}${t.via ? ` · hittades som "${escapeHtml(t.via)}"` : ''}">✓ ${escapeHtml(t.term)}${t.req ? ' <small>krav</small>' : ''}</span>`).join('')}
+      ${s.matched.map((t) => `<span class="tag ${t.type === 'cv' ? 'cv' : ''} ${t.where}" title="${typeLabel[t.type]} · ${whereLabel[t.where]}${t.via ? ` · hittades som "${escapeHtml(t.via)}"` : ''}">✓ ${escapeHtml(t.term)}${whereShort[t.where] ? ` <small>${whereShort[t.where]}</small>` : ''}</span>`).join('')}
       ${s.missed.map((t) => `<span class="tag miss" title="Finns inte i annonsen">${escapeHtml(t.term)}</span>`).join('')}
       ${s.lacking.map((l) => `<span class="tag lack" title="Annonsen kräver detta men det finns inte bland dina verktyg eller i ditt CV">Krav: ${escapeHtml(l)}</span>`).join('')}
     </div>` : '';
@@ -669,6 +722,15 @@ $('results').addEventListener('click', (e) => {
       return;
     case 'addtool':
       tools.add(btn.dataset.name); return;
+    case 'addname': {
+      // Det som står i listorna just nu följer med, så att sökningen bara utökas.
+      if (!roles.length) { const cur = currentSelection(); if (cur) roles.push(cur); }
+      if (!roles.some((r) => r.id === btn.dataset.id)) roles.push({ id: btn.dataset.id, label: `${btn.dataset.label} (yrke)`, type: 'name' });
+      store.set('jm.roles', roles);
+      renderRoles();
+      search();
+      return;
+    }
     case 'transit':
       btn.textContent = '🚆 Räknar…';
       computeTravel([ad]).then(renderResults).catch((err) => { btn.textContent = '🚆 ' + err.message; });

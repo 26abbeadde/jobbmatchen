@@ -1,6 +1,6 @@
 // Matchning mellan dina termer (nyckelord, verktyg, CV) och annonserna.
 
-import { SKILL_DICTIONARY, SYNONYM_GROUPS, STOPWORDS, WEIGHT, HEADLINE_BOOST, REQUIREMENT_BOOST, CV_TERM_CAP } from './config.js';
+import { SKILL_DICTIONARY, SYNONYM_GROUPS, STOPWORDS, WEIGHT, HEADLINE_BOOST, OCCUPATION_BOOST, REQUIREMENT_BOOST, KEYWORD_TEXT_WEIGHT, CV_TERM_CAP } from './config.js';
 import { lc, norm, hasTerm, firstHit, termRegex, cleanLabel } from './text.js';
 
 // ---------- Synonymer ----------
@@ -34,6 +34,15 @@ export function adText(ad) {
 export function adLower(ad) {
   if (!ad._lower) ad._lower = lc(adText(ad));
   return ad._lower;
+}
+
+// Yrket som arbetsgivaren klassat annonsen som, samt yrkesgruppen.
+export function adOccupation(ad) {
+  if (ad._occ === undefined) {
+    ad._occ = [ad.occupation?.label, ad.occupation_group?.label].filter(Boolean).join('\n');
+    ad._occLower = lc(ad._occ);
+  }
+  return ad._occ;
 }
 
 // Delar upp annonstexten i krav och meriter utifrån rubriker och fraser som
@@ -80,21 +89,27 @@ export function buildTerms({ keywords = [], tools = [], cvTerms = [] }) {
 }
 
 export function scoreAd(ad, terms) {
-  const text = adText(ad), lower = adLower(ad);
+  const text = adText(ad), lower = adLower(ad), occ = adOccupation(ad);
   const head = ad.headline || '', headLower = lc(head);
   adSections(ad);
   const matched = [], missed = [];
-  let got = 0, total = 0, cvTotal = 0;
+  let got = 0, total = 0, cvTotal = 0, kwTitle = false, kwAny = false;
   for (const t of terms) {
     const w = WEIGHT[t.type];
     if (t.type === 'cv') cvTotal += w; else total += w;
     const hit = firstHit(text, lower, t.variants);
-    if (hit) {
-      const req = !!firstHit(ad._req, ad._reqLower, t.variants);
-      const inHead = !!firstHit(head, headLower, t.variants);
-      got += w * (inHead ? HEADLINE_BOOST : req ? REQUIREMENT_BOOST : 1);
-      matched.push({ ...t, req, via: lc(hit) !== lc(t.term) ? hit : null });
-    } else if (t.type !== 'cv') missed.push(t);
+    if (!hit) { if (t.type !== 'cv') missed.push(t); continue; }
+    // Var träffen finns avgör hur mycket den väger: i rubriken eller yrket säger
+    // den vad jobbet är, i kravdelen vad som krävs, annars nämns ordet bara i
+    // texten (t.ex. "kontakta vår IT-support"), vilket säger lite om ett nyckelord.
+    const where = firstHit(head, headLower, t.variants) ? 'title'
+      : firstHit(occ, ad._occLower, t.variants) ? 'occupation'
+        : firstHit(ad._req, ad._reqLower, t.variants) ? 'req' : 'text';
+    const factor = { title: HEADLINE_BOOST, occupation: OCCUPATION_BOOST, req: REQUIREMENT_BOOST }[where]
+      ?? (t.type === 'kw' ? KEYWORD_TEXT_WEIGHT : 1);
+    got += w * factor;
+    if (t.type === 'kw') { kwAny = true; kwTitle ||= where === 'title' || where === 'occupation'; }
+    matched.push({ ...t, where, req: where === 'req', via: lc(hit) !== lc(t.term) ? hit : null });
   }
   // CV-termer kan vara många, så de räknas mot ett tak för att inte dra ner
   // procenten för annonser som matchar det du själv skrivit.
@@ -106,10 +121,25 @@ export function scoreAd(ad, terms) {
     ? [...new Set((ad.must_have?.skills || []).flatMap((s) => cleanLabel(s.label).slice(0, 1)))]
       .filter((l) => !terms.some((t) => t.variants.some((v) => hasTerm(l, v) || hasTerm(v, l)))).slice(0, 4)
     : [];
-  return { pct, matched, missed, lacking };
+  return { pct, matched, missed, lacking, kwTitle, kwAny };
 }
 
 export const matchesAny = (ad, words) => words.some((w) => firstHit(adText(ad), adLower(ad), variantsFor(w)));
+
+// Vilka yrken (Arbetsförmedlingens yrkesbenämningar) annonserna med dina
+// nyckelord i rubriken oftast är klassade som. Att söka på yrket ger även
+// annonser med andra rubriker, t.ex. "First Line-tekniker" för "it support".
+export function occupationSuggestions(ads, exclude = new Set(), max = 4) {
+  const counts = new Map();
+  for (const ad of ads) {
+    const occ = ad.occupation;
+    if (!ad._score?.kwTitle || !occ?.concept_id || exclude.has(occ.concept_id)) continue;
+    const c = counts.get(occ.concept_id) || { id: occ.concept_id, label: occ.label, count: 0 };
+    c.count++;
+    counts.set(occ.concept_id, c);
+  }
+  return [...counts.values()].filter((c) => c.count >= 2).sort((a, b) => b.count - a.count).slice(0, max);
+}
 
 // ---------- CV ----------
 // Plockar ut kompetenser ur CV:t: ordlistan, kompetenser som annonserna själva

@@ -55,8 +55,14 @@
     <p class="hint" id="homeStatus" style="margin-top:6px"></p>
 
     <label class="field" for="kwInput">Nyckelord</label>
-    <p class="hint">T.ex. "projektledare", "junior". Tryck Enter efter varje ord.</p>
+    <p class="hint">Vad jobbet ska heta, t.ex. "it support", "servicedesk", "projektledare". Tryck Enter efter varje.</p>
     <div class="chipbox" id="kwBox"><input id="kwInput" type="text" placeholder="Lägg till nyckelord…"></div>
+    <label class="hint" for="kwScope" style="display:block;margin-top:8px">Nyckelorden ska finnas i</label>
+    <select id="kwScope">
+      <option value="title">Rubriken eller yrket (mest träffsäkert)</option>
+      <option value="text">Var som helst i annonsen</option>
+      <option value="off">Ingenstans, använd dem bara för sortering</option>
+    </select>
 
     <label class="field" for="toolInput">Verktyg &amp; system du kan</label>
     <p class="hint">T.ex. Excel, SAP, Python, Fortnox, truckkort B.</p>

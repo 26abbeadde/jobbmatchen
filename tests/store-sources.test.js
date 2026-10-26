@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createStore, exportData, importData } from '../js/store.js';
-import { normalizeLinksAd, externalOnly, searchAds } from '../js/sources.js';
+import { normalizeLinksAd, externalOnly, searchAds, fetchExternal, asQuery } from '../js/sources.js';
 
 // Minimal ersättning för localStorage.
 function memoryStorage(init = {}) {
@@ -78,8 +78,37 @@ test('searchAds slår ihop källor, filtrerar på datum och tar bort dubbletter'
     }
     return { ok: true, json: async () => body };
   };
-  const res = await searchAds({ pairs: [], linksPairs: [], now, fetchImpl });
+  const res = await searchAds({ requests: [{ pairs: [], pages: 3 }], linksPairs: [], now, fetchImpl });
   assert.deepEqual(res.ads.map((a) => a.id).sort(), ['1', '2', 'link-ext']);
   assert.equal(res.external, 1);
   assert.equal(res.total, 3);
+});
+
+test('fraser skickas inom citattecken', () => {
+  assert.equal(asQuery('it support'), '"it support"');
+  assert.equal(asQuery('it-support'), '"it-support"');
+  assert.equal(asQuery('servicedesk'), 'servicedesk');
+});
+
+test('sökord sorteras på relevans, utan sökord hämtas de senaste', async () => {
+  const urls = [];
+  const fetchImpl = async (url) => { urls.push(new URL(url)); return { ok: true, json: async () => ({ total: { value: 0 }, hits: [] }) }; };
+  await searchAds({
+    requests: [{ pairs: [['occupation-group', 'g']], pages: 1 }, { pairs: [['occupation-group', 'g']], q: 'it support', pages: 2 }],
+    fetchImpl,
+  });
+  assert.equal(urls.length, 3);
+  assert.equal(urls[0].searchParams.get('sort'), 'pubdate-desc');
+  assert.equal(urls[0].searchParams.get('q'), null);
+  assert.equal(urls[1].searchParams.get('q'), '"it support"');
+  assert.equal(urls[1].searchParams.get('sort'), null);
+  assert.deepEqual(urls.slice(1).map((u) => u.searchParams.get('offset')), ['0', '100']);
+  assert.ok(urls.every((u) => u.searchParams.get('occupation-group') === 'g'));
+});
+
+test('Links söker på nyckelord när inga roller är valda', async () => {
+  const urls = [];
+  const fetchImpl = async (url) => { urls.push(new URL(url)); return { ok: true, json: async () => ({ total: { value: 0 }, hits: [] }) }; };
+  await fetchExternal({ linksPairs: [], queries: ['servicedesk', 'it support'], fetchImpl });
+  assert.deepEqual(urls.map((u) => u.searchParams.get('q')), ['servicedesk', '"it support"']);
 });

@@ -1,7 +1,7 @@
 // Offlinestöd: appens egna filer sparas i en cache så att appen startar och
 // sparade annonser går att läsa utan nät. Annonser och API-anrop cachas inte.
 
-const CACHE = 'jobbmatchen-v2';
+const CACHE = 'jobbmatchen-v3';
 const SHELL = [
   './', './index.html', './css/app.css', './manifest.webmanifest',
   './js/app.js', './js/config.js', './js/text.js', './js/matching.js', './js/learning.js', './js/tracker.js',
